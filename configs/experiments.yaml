@@ -1,0 +1,81 @@
+# =============================================================================
+# Experiment matrix. Each experiment = topology overlay + overrides, run for
+# every workload x seed. `scripts/run_experiments.py` expands this file into
+# individual runs under results/raw/<experiment>/<workload>/seed<k>/.
+# Baseline letters A-E follow the project brief (section 27).
+# =============================================================================
+inherit: default.yaml
+common:
+  workloads: [matmul, attention, weight_load]     # conv + activation_move also generated
+  seeds: [1, 2, 3, 4, 5]                           # mean +/- 95% CI reported across seeds
+  duration_epochs: 1000                            # = 1.0 s physical at time_scale_k = 100
+  warmup_epochs: 50                                # excluded from metrics
+
+experiments:
+  E0_thermal_validation:
+    description: Thermal model checks (analytic step response, steady state, energy balance) and parameter sensitivity. Python only.
+    rtl: false
+    sweeps:
+      thermal.materials.hybrid_bond.k_w_mk: [0.5, 1.5, 5.0, 20.0]
+      thermal.materials.tim.k_w_mk: [2.0, 4.0, 8.0]
+      thermal.heatsink.r_k_w: [0.1, 0.2, 0.4]
+
+  E1_baseline_2p5d:            # baseline A
+    topology: 2p5d.yaml
+    overrides: {thermal_control.enabled: false, routing.policy: static}
+
+  E2_3d:                       # baseline B
+    topology: 3d.yaml
+    overrides: {thermal_control.enabled: false, routing.policy: static}
+
+  E3_3d_throttling:            # baseline C
+    topology: 3d.yaml
+    overrides: {thermal_control.enabled: true, routing.policy: static}
+    ablations:
+      thermal_control.order:
+        - [frequency, width, injection]
+        - [width, frequency, injection]
+        - [injection]
+
+  E4_3d_thermal_routing:       # baseline D
+    topology: 3d.yaml
+    overrides: {thermal_control.enabled: false}
+    variants:
+      threshold: {routing.policy: threshold}
+      cost:      {routing.policy: cost}
+    sweeps:
+      routing.cost_weights.gamma_temperature: [0.0, 0.5, 1.0, 2.0, 4.0]
+
+  E5_fault_tolerance:
+    topology: [2p5d.yaml, 3d.yaml]
+    overrides: {thermal_control.enabled: false, routing.policy: static}
+    fault_scenarios:            # permanent lane failures on Link A, TX direction
+      - {failed_lanes: 1, lanes: [13],                 start_epoch: 100}
+      - {failed_lanes: 2, lanes: [13, 27],             start_epoch: 100}
+      - {failed_lanes: 4, lanes: [3, 13, 21, 27],      start_epoch: 100}
+      - {failed_lanes: 5, lanes: [3, 9, 13, 21, 27],   start_epoch: 100}   # exceeds spares -> degraded width
+      - {failed_lanes: 8, lanes: [1, 3, 9, 13, 17, 21, 27, 30], start_epoch: 100}
+      - {transient: true, lanes: [13], start_epoch: 100, duration_cycles: 2000}
+      - {burst_error: true, lanes: [5, 6, 7], start_epoch: 100, length_cycles: 16}
+    sweeps:
+      link.spare_lanes: [0, 2, 4, 8]      # RQ5: redundancy needed for k failures
+
+  E6_combined:                 # baseline E, primary experiment
+    topology: 3d.yaml
+    overrides:
+      thermal_control.enabled: true
+      routing.policy: cost
+      faults.schedule: thermal_model
+
+  X1_retry_buffer_vs_rtt:      # supporting ablation
+    topology: 2p5d.yaml
+    sweeps:
+      adapter.retry_depth: [8, 16, 32, 64]
+      channel.latency_cycles: [2, 8, 16, 32]
+    inject: {mode: bit_flip, ber: 1.0e-6}
+
+  X2_time_scale_sensitivity:   # checks that conclusions do not hinge on K
+    topology: 3d.yaml
+    overrides: {thermal_control.enabled: true}
+    sweeps:
+      cosim.time_scale_k: [25, 50, 100, 200]

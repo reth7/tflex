@@ -1,0 +1,41 @@
+# =============================================================================
+# 3D topology: AI die on top (heatsink side), memory die (SRAM + HBM-like
+# regions) in the middle, I/O/base die at the bottom. Vertical links are
+# TSV / hybrid-bond-inspired LOGICAL links: latency, bandwidth, energy, thermal
+# coupling and fault probability are modeled; no electromagnetic modeling.
+# Inherits configs/default.yaml. All geometry and link values are ASSUMED.
+# =============================================================================
+inherit: default.yaml
+topology:
+  kind: 3d
+  stack_order: [ai, mem, base]     # top -> bottom; ablation: [mem, ai, base]
+  footprint_mm: [10.0, 10.0]       # identical footprint for all three dies
+  dies:
+    ai:   {thickness_um: 300, tiles: [4, 4]}
+    mem:  {thickness_um: 50,  tiles: [4, 4],
+           regions: {sram: [[0, 0], [0, 1], [0, 2], [0, 3]],        # west column
+                     hbm:  rest}}
+    base: {thickness_um: 100, tiles: [4, 4]}
+  bond_layers:                     # between consecutive dies in stack_order
+    - {name: bond_ai_mem,   material: hybrid_bond, thickness_um: 5}
+    - {name: bond_mem_base, material: hybrid_bond, thickness_um: 5}
+  layers_above_stack:
+    - {name: tim1, material: tim, thickness_um: 50}
+    - {name: lid,  material: copper, thickness_um: 1000, size_mm: [20.0, 20.0], tiles: [6, 6]}
+  layers_below_stack:
+    - {name: c4, material: underfill_bumps, thickness_um: 80}   # then secondary_path_r_k_w
+  ai_power_map:                    # same relative map as 2p5d.yaml for a fair comparison
+    - [0.6, 0.8, 1.0, 1.0]
+    - [0.8, 1.2, 1.6, 1.8]
+    - [0.8, 1.2, 1.6, 1.8]
+    - [0.6, 0.8, 1.0, 1.0]
+
+links:
+  # Vertical links: the PHY tile is the same [col, row] on both dies.
+  S: {ends: [ai, sram], phy_tile: [0, 1], latency_cycles: 3, energy_pj_per_bit: 0.15}
+  A: {ends: [ai, hbm],  phy_tile: [2, 2], latency_cycles: 2, energy_pj_per_bit: 0.15}   # under hotspot
+  B: {ends: [ai, hbm],  phy_tile: [3, 0], latency_cycles: 4, energy_pj_per_bit: 0.2}    # corner, longer route
+  # energy_pj_per_bit values are placeholders (assumed), not literature values.
+
+faults:
+  vertical_link_fault_scale: 1.0   # multiplier on lane fault hazard for vertical links (what-if knob)

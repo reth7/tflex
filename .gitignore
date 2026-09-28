@@ -1,0 +1,12 @@
+.venv/
+.tools/
+obj_dir/
+build/
+sim_build/
+__pycache__/
+*.pyc
+*.vcd
+*.fst
+results.xml
+results/raw/*
+!results/raw/.gitkeep

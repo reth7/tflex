@@ -1,0 +1,39 @@
+# =============================================================================
+# 2.5D topology: AI, SRAM and HBM-like chiplets side by side on a passive
+# silicon interposer, shared lid + heatsink on top. Inherits configs/default.yaml.
+# All geometry and link values are ASSUMED PARAMETERS.
+# =============================================================================
+inherit: default.yaml
+topology:
+  kind: 2p5d
+  # Floorplan in mm, origin at the interposer's south-west corner. Tiles are
+  # indexed [col, row] with [0, 0] at the die's south-west corner.
+  dies:
+    ai:   {origin_mm: [7.0, 1.0],  size_mm: [10.0, 10.0], thickness_um: 300, tiles: [4, 4]}
+    sram: {origin_mm: [1.0, 3.5],  size_mm: [5.0, 5.0],   thickness_um: 300, tiles: [2, 2]}
+    hbm:  {origin_mm: [18.0, 1.0], size_mm: [8.0, 10.0],  thickness_um: 720, tiles: [2, 4]}
+                                    # HBM-like stack lumped as one thick die (assumed)
+  interposer: {size_mm: [27.0, 12.0], thickness_um: 100, tiles: [9, 4]}
+  layers_above_dies:               # die -> TIM1 -> lid -> heatsink
+    - {name: tim1, material: tim, thickness_um: 50}
+    - {name: lid,  material: copper, thickness_um: 1000, size_mm: [27.0, 12.0], tiles: [9, 4]}
+  layers_below_dies:               # die -> microbump/underfill -> interposer -> C4 -> substrate
+    - {name: ubump, material: underfill_bumps, thickness_um: 30}
+    - {name: interposer, material: silicon}
+    - {name: c4, material: underfill_bumps, thickness_um: 80}   # then secondary_path_r_k_w
+  # Relative compute power density over the AI die's 4x4 tiles (rows listed north->south).
+  # A compute hotspot sits near the east edge, next to Link A's PHY.
+  ai_power_map:
+    - [0.6, 0.8, 1.0, 1.0]
+    - [0.8, 1.2, 1.6, 1.8]
+    - [0.8, 1.2, 1.6, 1.8]
+    - [0.6, 0.8, 1.0, 1.0]
+
+links:
+  # Each link is full duplex: two unidirectional channels with their own adapter + PHY.
+  S: {ends: [ai, sram], ai_phy_tile: [0, 1], mem_phy_tile: [1, 1], latency_cycles: 10, energy_pj_per_bit: 0.5}
+  A: {ends: [ai, hbm],  ai_phy_tile: [3, 2], mem_phy_tile: [0, 2], latency_cycles: 8,  energy_pj_per_bit: 0.5}
+  B: {ends: [ai, hbm],  ai_phy_tile: [3, 0], mem_phy_tile: [0, 0], latency_cycles: 12, energy_pj_per_bit: 0.6}
+  # B is placed away from the hotspot with a longer interposer route: higher
+  # latency and energy/bit, lower local temperature. This is the tradeoff that
+  # thermal-aware routing is meant to exploit (all values assumed).

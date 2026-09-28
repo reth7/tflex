@@ -1,0 +1,11 @@
+# Exact versions verified in the reference environment (Ubuntu 24.04, Python 3.11).
+# cocotb is pinned to 1.9.x because cocotb 2.x requires a newer Verilator than
+# the Ubuntu 24.04 package (5.020).
+numpy==2.4.4
+scipy==1.17.1
+pandas==3.0.2
+matplotlib==3.10.9
+networkx==3.6.1
+PyYAML==6.0.3
+pytest==9.1.1
+cocotb==1.9.2
