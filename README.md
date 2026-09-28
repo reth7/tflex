@@ -4,7 +4,7 @@
 
 > This project is a UCIe-inspired architectural/RTL research model and is not a certified implementation of the UCIe specification.
 
-**Status:** Phase 1 (specification) complete and awaiting review. No RTL beyond the shared type package exists yet, and no results have been produced. Every number in the docs is an assumed parameter or an analytical estimate and is labeled as such.
+**Status:** Milestone 1 (CDC + basic link datapath) complete: async FIFO, simplex D2D link across three clock domains with credit flow control, bound assertions and a 60-run regression, all passing ([report](results/reports/m1_report.md)). Milestone 2 (CRC / retry) has not started. Numbers in the docs are labeled assumed, analytical or simulated.
 
 ## Motivation
 
@@ -14,7 +14,7 @@ Chiplet-based AI accelerators move enormous amounts of data across die-to-die li
 
 - AI accelerator chiplet ↔ SRAM chiplet over link **S**; AI ↔ HBM-like chiplet over parallel links **A** and **B** (for routing). Each link is full duplex.
 - **Adapter:** packetization, 256-bit flits, CRC-16, go-back-N retry, credit flow control, sideband ACK/NAK.
-- **PHY (logical):** 32 data + 4 spare lanes, gearbox for 32/24/16/8-lane widths, compaction-based lane repair, PRBS lane testing, deskew, link-training state machine.
+- **PHY (logical):** 32 data + 4 spare lanes, gearbox for 32/16/8-lane widths (UCIe-style halving), compaction-based lane repair, PRBS lane testing, deskew, link-training state machine.
 - **Fault injector:** bit flips, bursts, stuck-at, dead lanes, packet/CRC corruption, temporary link loss, random BER.
 - **Python side:** workload generator (matmul, conv, attention, weight load, activation movement), power model, tile-level compact thermal RC model for 2.5D and 3D stacks, thermal controller, routing policies, hypothetical temperature-dependent fault model.
 - **Co-simulation:** Verilator C++ harness ↔ Python orchestrator, one JSON-lines exchange per epoch.
@@ -43,7 +43,7 @@ Deviation from the brief's layout: Python lives in an importable package (`pytho
 ./scripts/setup_env.sh   # apt: verilator yosys iverilog; sv2v -> .tools/; Python venv -> .venv/
 make check-env
 make lint                # Verilator lint + sv2v/Yosys parse
-make test                # Phase 1: package layout checks
+make test                # package checks + Milestone 1 regression (60 runs)
 ```
 
 Reference environment: Ubuntu 24.04, Verilator 5.020, Yosys 0.33, sv2v 0.0.13, Python 3.11, cocotb 1.9.2 (pinned in `requirements.txt`).

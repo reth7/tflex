@@ -1,6 +1,25 @@
 # T-FLEX Plan: Milestones, Risks, Setup, Open Decisions
 
-**Status:** Phase 1 — specification delivered, awaiting approval before Milestone 1.
+**Status:** Milestone 1 complete (2026-09-28), awaiting approval before Milestone 2. Report: [results/reports/m1_report.md](../results/reports/m1_report.md).
+
+| Milestone | Status | Evidence |
+|---|---|---|
+| Phase 1 — specification | done | this document set |
+| M1 — CDC + basic link datapath | **done** | `make test`: 60/60 regression runs pass; m1_report.md |
+| M2 — CRC / retry + minimal fault injection | not started | — |
+
+## 0. Decision log (approved by the project owner, 2026-09-28)
+
+1. **Time scaling:** 10 µs RTL epoch = 1 ms thermal time (100×), starting from a precomputed steady state. X2 must compare at least 50× vs 100× (peak temperature, temperature evolution, throttle events, routing decisions, completion time); if conclusions change, the limitation is documented, not tuned away.
+2. **Compute power** is *not* proportional to D2D bandwidth: bandwidth → data arrival → compute progress → work completed → compute activity → compute power (phase, utilization, op rate, precision, active resources, memory activity). Primary application metric: **workload completion time**, also reporting bandwidth, latency, compute stall time, retry overhead and throttling time. D2D power is never inflated to make routing look important.
+3. **Thermal granularity:** 4 × 4 tiles per die by default; the 5-node lumped model stays as a baseline/reference.
+4. **Milestone adjustments accepted:** async FIFO in M1, minimal injector in M2 (CRC corruption, single-bit corruption, selected lane failure), fixed-mask repair in M3, live detection/retraining + first synthesis (sv2v → Yosys) in M4.
+5. **24-lane mode rejected.** Widths are 32 / 16 / 8 (UCIe-style halving); no padding flits. Documented as a rejected alternative in protocol.md §5.1.
+6. **Mappers:** the extended mapper (`MAX_SHIFT = P − W_min`) is the primary research mapper; the compact mapper (5:1 muxes, ≤ 4 failures) is also implemented. X7 compares area, timing, mux/resources, supported fault count, flexibility (and power if the flow gives it) from measured synthesis; no winner is chosen in advance.
+7. **Python power/thermal models may be developed in parallel** with the RTL milestones, runnable on synthetic activity traces, and are not coupled to the RTL until the activity schema is stable.
+8. **Progressive workloads:** Stage 0 (deterministic / random / bursty traffic, no AI) → Stage 1 (synthetic compute phases: weight load, compute, activation load, output store) → Stage 2 (CNN- and attention-like traffic) → Stage 3 (TGAPneumoSeg-derived workload, application-level validation only, never before the earlier stages are validated).
+9. **Expected ~1 °C routing benefit is a hypothesis, not a target.** Whatever the simulation shows is reported.
+
 
 ---
 
@@ -10,9 +29,9 @@ The brief's 12 milestones are kept in order. Four small adjustments (marked ◆)
 
 | M | Scope | New RTL / code | Exit tests |
 |---|---|---|---|
-| 1 | Basic transmission: descriptor-driven accelerator → packetizer → TX → channel → RX → SRAM model, one link, full width, no CRC/retry. ◆ **Async FIFO and reset synchronizers included** so core / link / mem run at different clocks from day one (retrofitting domains later would change every interface). | `reset_sync, sync_2ff, sync_fifo, async_fifo, packetizer, depacketizer, accel_model (directed descriptors), mem_sram_model, simple phy passthrough, d2d_channel`; Python golden packetizer; Dockerfile | packet round trips at lengths 0…65535; async FIFO random clock ratios; payload signatures match; SVA stream rules |
+| 1 ✔ | Basic transmission: descriptor-driven accelerator → packetizer → TX → channel → RX → SRAM model, one link, full width, no CRC/retry. ◆ **Async FIFO and reset synchronizers included** so core / link / mem run at different clocks from day one (retrofitting domains later would change every interface). | `reset_sync, sync_2ff, sync_fifo, async_fifo, packetizer, depacketizer, accel_model (directed descriptors), mem_sram_model, simple phy passthrough, d2d_channel`; Python golden packetizer; Dockerfile | packet round trips at lengths 0…65535; async FIFO random clock ratios; payload signatures match; SVA stream rules |
 | 2 | CRC, retry, flow control. ◆ **Minimal fault injector (bit flip, burst, CRC corrupt)** — retry cannot be tested without errors; the full injector stays in M4. | `crc, retry_tx, retry_rx, credit_return, sb_mux, sideband_channel, fault_injector (subset)` | CRC vectors + 10⁵ random; retry matrix (verification.md §3); no loss / duplication / reordering; credit invariants; retry count, retry latency, throughput degradation measured |
-| 3 | 32 + 4 lanes, gearbox, lane mapper, lane failure, repair controller. ◆ **Repair is exercised statically here** (bad mask set at link bring-up, dead lanes injected, traffic must flow around them); dynamic detection needs training, which is M4. | `gearbox_tx/rx, lane_map_tx/rx, lane_repair_ctrl` (+ `MAX_SHIFT` variants) | exhaustive ≤ 4-failure masks in Python, sampled in RTL; degraded widths; bandwidth ratio per width |
+| 3 | 32 + 4 lanes, gearbox (32/16/8), lane mapper (extended + compact), lane failure, repair controller. ◆ **Repair is exercised statically here** (bad mask set at link bring-up, dead lanes injected, traffic must flow around them); dynamic detection needs training, which is M4. | `gearbox_tx/rx, lane_map_tx/rx, lane_repair_ctrl` (+ `MAX_SHIFT` variants) | exhaustive ≤ 4-failure masks in Python, sampled in RTL; degraded widths; bandwidth ratio per width |
 | 4 | Link training, deskew, full error injection, CDC stress. Dynamic repair: failure → NAKs → retrain → LANE_CHECK → remap → resume. ◆ **First synthesis run** of adapter + PHY so synthesizability problems surface early, not at the end. | `ltsm, prbs_gen/chk, deskew, fault_injector (all modes), cdc_handshake`; `syn/` scripts | LTSM matrix; each fault mode; repair latency measured; CDC randomized; Yosys reports |
 | 5 | 2.5D topology: links S, A, B, HBM-like model, route select (static), path merge, CSR block, C++ harness with epochs and open-loop JSONL | `mem_hbm_model, route_select, path_merge, csr, system_top`; `sim/harness` | all links concurrently; frontdoor vs backdoor reads agree; open-loop replay deterministic |
 | 6 | 3D topology parameters, config loader with inheritance/overrides | Python config package | both topologies pass the M5 suite; resolved configs recorded |
@@ -23,7 +42,9 @@ The brief's 12 milestones are kept in order. Four small adjustments (marked ◆)
 | 11 | Thermal-aware routing: threshold and cost policies, weighted split | `python/tflex/routing`, RTL weighted mode | routing tests; E4 smoke |
 | 12 | Combined experiments, plots, synthesis reports, final report | `scripts/run_experiments.py`, `python/tflex/analysis`, `visualization` | `make experiment && make plots` reproduces all tables and figures |
 
-Optional parallel track (needs your approval): M8 and M9 are pure Python and independent of the RTL; building them alongside M2–M4 would de-risk the thermal assumptions (E0) early. By default they wait for their turn.
+Parallel track (approved, decision 7): M8 and M9 are pure Python and may be built alongside M2–M4 against synthetic activity traces.
+
+**M1 as delivered vs. the row above:** traffic source/sink modules (`tflex_traffic_src/sink`) stand in for the accelerator and SRAM models, which arrive with the topologies in M5; a minimal credit loop was added so backpressure could be tested (see m1_report.md §1); the Python golden packetizer and the Dockerfile were not needed for the M1 tests and move to M2 (golden CRC/packet model) and M5 (Dockerfile) respectively.
 
 ## 2. Technical risks
 
@@ -65,10 +86,4 @@ Commands: `./scripts/setup_env.sh` (apt, sv2v, venv — ran successfully in 42 s
 
 ## 5. Decisions requested before Milestone 1
 
-1. **Time scaling:** K = 100 (1 ms of physical time per 10 µs RTL epoch) with steady-state warm start — or would you prefer an additional calibrated fast Python link model for long sweeps?
-2. **Compute coupling:** accept the roofline coupling of compute power to delivered bandwidth (architecture.md §7)?
-3. **Thermal granularity:** 4 × 4 tiles per die by default, with the brief's 5-node lumped model kept as a mode?
-4. **Milestone adjustments ◆:** async FIFO in M1, minimal injector in M2, static repair in M3 / dynamic in M4, first synthesis in M4?
-5. **24-lane mode:** keep it via the gearbox with IDLE padding, or use UCIe-like halving only (32/16/8)?
-6. **Lane mapper default:** `MAX_SHIFT = 28` (degraded widths supported) with `MAX_SHIFT = 4` synthesized for comparison?
-7. **Parallel Python track** for M8/M9?
+All seven were answered on 2026-09-28; see §0, decision log.

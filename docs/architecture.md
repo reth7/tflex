@@ -59,7 +59,7 @@ ASCII fallback (one direction of one link, AI → HBM write):
  clk_core                         | clk_link_A                                                                   | clk_mem
  accel -> route -> packetizer -> [async FIFO] -> retry_tx -> gearbox_tx -> lane_map_tx -> injector -> channel ->   |
                                   |           (seq, CRC,    (width      (36 phys     (faults)    (latency,       |
-                                  |            replay buf,   32/24/16/8)  lanes)                  skew)           |
+                                  |            replay buf,   32/16/8)     lanes)                  skew)           |
                                   |            credits)                                                           |
                                   |  deskew -> lane_map_rx -> gearbox_rx -> retry_rx -> [async FIFO] -> depacketizer -> HBM model
                                   |                                        (CRC chk,
@@ -89,6 +89,8 @@ CDC crossings (all implemented with `tflex_async_fifo`, Gray-coded pointers, 2-F
 Credit return is derived from the RX async FIFO's synchronized read pointer, so credits are released exactly when the consumer frees space, without another crossing.
 
 ## 4. RTL module catalogue
+
+**Implementation status (Milestone 1).** Implemented and tested: `tflex_pkg`, `tflex_reset_sync`, `tflex_sync_bits` (the synchronizer called `tflex_sync_2ff` below; metastability-delay option deferred to M4), `tflex_delay_line` (new: shared fixed-latency pipe), `tflex_async_fifo`, `tflex_pkt_len_check` (new: framing checker shared by packetizer and depacketizer), `tflex_packetizer`, `tflex_depacketizer`, `tflex_adapter_tx` / `tflex_adapter_rx` (credit flow control only; they become the retry engines of §4.2 in M2), `tflex_credit_return`, `tflex_phy_tx` / `tflex_phy_rx` (full width, identity map), `tflex_d2d_channel` (latency only), `tflex_sideband_channel` (carries credit counts until `sb_msg_t` arrives in M2), `tflex_d2d_link_simplex` (new: one direction across three clock domains), and `tflex_traffic_src` / `tflex_traffic_sink` (new: stand-ins for the accelerator/memory packet paths until M5). The packetizer consumes a packet *item stream* (`pkt_item_t`: header item, then 28-byte payload items, with sop/eop) rather than separate header and payload ports. See results/reports/m1_report.md.
 
 Conventions: all modules are SystemVerilog, parameterized, synthesizable unless marked **[sim]**. Streams use `*_valid / *_ready / *_data` (a transfer happens when both are high; `valid` must not depend combinationally on `ready`; data must hold while `valid && !ready`). Active-low async reset `rst_n`, synchronized per domain by `tflex_reset_sync`. Names are prefixed `tflex_`.
 
@@ -123,7 +125,7 @@ Conventions: all modules are SystemVerilog, parameterized, synthesizable unless 
 
 | Module | Purpose | Interface summary |
 |---|---|---|
-| `tflex_gearbox_tx` | 256-b flits → beats of `W × LANE_BITS` bits on the active logical lanes. 64-byte circular accumulator; for W = 24 inserts `FT_IDLE` pad flits when the input drains mid-alignment (protocol.md §5). | `flit_in` stream; `width_mode`; → `beat_valid, beat_data[DATA_LANES*LANE_BITS]` |
+| `tflex_gearbox_tx` | 256-b flits → beats of `W × LANE_BITS` bits on the active logical lanes, `W ∈ {32, 16, 8}` (1, 2 or 4 beats per flit; no padding needed). | `flit_in` stream; `width_mode`; → `beat_valid, beat_data[DATA_LANES*LANE_BITS]` |
 | `tflex_gearbox_rx` | Beats → flits; flit framing by byte count from the training alignment point; drops `FT_IDLE` flits | `beat_valid, beat_data, width_mode, align` → `flit_out` |
 | `tflex_lane_map_tx` | Logical → physical lanes with a per-physical-lane mux; unused physical lanes drive the PRBS idle pattern | `map_table, active_mask` → `phys_data[PHYS_LANES*LANE_BITS]` |
 | `tflex_lane_map_rx` | Physical → logical, per-logical-lane mux | `phys_data, map_table` → `log_data` |
@@ -189,13 +191,13 @@ Physical lanes per direction: `P = L + S = 32 + 4 = 36`, plus one dedicated vali
 | `MAX_SHIFT` | Mux size | Supports |
 |---|---|---|
 | `S` (= 4) | 5:1 per lane | up to 4 failures at full width only; 5th failure → link down |
-| `P − W_min` (= 28) | up to 29:1 | any failure pattern, degrading to 24/16/8 lanes while ≥ W good lanes remain |
+| `P − W_min` (= 28) | up to 29:1 | any failure pattern, degrading to 16/8 lanes while ≥ W good lanes remain |
 
 Both variants will be synthesized (area/timing comparison is a planned hardware result). A table-driven 36:1 crossbar (`repair_style: crossbar`) is kept as a third option for non-monotonic policies (e.g. steering around hot lanes); it is optional.
 
 **When the map changes:** only in LTSM state `REPAIR`, with TX quiesced and both ends committing via `SB_MAP_COMMIT`. An assertion requires `map` stable whenever `state == ACTIVE`.
 
-**Width modes vs failures:** after LANE_CHECK the repair controller picks the largest `W ∈ {32, 24, 16, 8}` with `W ≤ min(requested_width, good_lanes)` (the thermal controller may request a narrower width). Fewer than `min_width` good lanes → `LINK_DOWN`.
+**Width modes vs failures:** after LANE_CHECK the repair controller picks the largest `W ∈ {32, 16, 8}` with `W ≤ min(requested_width, good_lanes)` (the thermal controller may request a narrower width). Fewer than `min_width` good lanes → `LINK_DOWN`.
 
 ## 6. 2.5D and 3D mapping onto the same RTL
 

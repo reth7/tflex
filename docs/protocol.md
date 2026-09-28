@@ -95,11 +95,11 @@ The receiver never back-pressures the gearbox: the credit protocol guarantees RX
 
 ### 5.1 Striping and gearbox
 
-Byte `k` of a flit is bits `[8k+7 : 8k]`. The transmitter treats flits as a continuous byte stream: stream byte `n` (= flit index × 32 + `k`) goes to beat `⌊n/W⌋`, logical lane `n mod W`, where `W ∈ {32, 24, 16, 8}` is the active width. At `W = 32` each flit is exactly one beat and logical lane 31 carries bits 255:248.
+Byte `k` of a flit is bits `[8k+7 : 8k]`. The transmitter treats flits as a continuous byte stream: stream byte `n` (= flit index × 32 + `k`) goes to beat `⌊n/W⌋`, logical lane `n mod W`, where `W ∈ {32, 16, 8}` is the active width. At `W = 32` each flit is exactly one beat and logical lane 31 carries bits 255:248.
 
-A dedicated valid lane marks beats that carry stream bytes. The transmitter only emits full beats. For `W = 24` (32-byte flits do not divide into 24-byte beats) the gearbox would otherwise strand up to 16 bytes when traffic pauses; it therefore appends `IDLE` flits until the stream is back on a 96-byte boundary (at most 2 pad flits per pause). For `W ∈ {8, 16, 32}` no pads are ever needed. The receiver counts bytes from the alignment point established in DESKEW to delimit flits and drops good-CRC `IDLE` flits.
+A dedicated valid lane marks beats that carry stream bytes. Because 32-byte flits divide evenly into 32-, 16- and 8-byte beats, a flit always occupies exactly 1, 2 or 4 whole beats and no padding is ever needed. The receiver counts bytes from the alignment point established in DESKEW to delimit flits. `IDLE` flits remain defined (and are dropped by the receiver) but are not needed by the gearbox.
 
-Bandwidth scales as `W/32` (plus pad overhead at W = 24). Note: UCIe defines width degradation in halving steps; the 24-lane mode is this project's extension and exists because the brief asks for it.
+Bandwidth scales as `W/32`. Width degradation follows UCIe-style halving (32 → 16 → 8). **Rejected alternative:** a 24-lane mode was specified in the Phase 1 draft; it needed `IDLE` pad flits to realign 32-byte flits onto 24-byte beats after every traffic pause, adding gearbox complexity and a pad overhead for one intermediate width. It was removed from the primary architecture (plan.md, decision log) and is not implemented or evaluated.
 
 ### 5.2 Lane mapping and repair
 
@@ -108,7 +108,7 @@ Defined in architecture.md §5 (compaction mapping, `MAX_SHIFT` datapath knob). 
 1. Lanes are only tested and remapped during training (`TRAIN` → `LANE_CHECK` → `REPAIR`). During `ACTIVE` a failing lane shows up as CRC errors; retry absorbs transients and repeated NAKs escalate to `RETRAIN`.
 2. The receiver of each direction decides which physical lanes pass and sends the mask with `SB_LANE_RESULT`. Both ends compute the same map from `(pass mask, strike history, requested width)` with the same deterministic function, and the transmitter confirms with `SB_MAP_COMMIT`.
 3. **Transient vs permanent:** a lane that fails `LANE_CHECK` gets a strike and is excluded for this training. A lane that later passes with fewer than `transient_strikes` (2) strikes is readmitted; at 2 strikes it is excluded permanently.
-4. Width: the largest `W ∈ {32, 24, 16, 8}` with `W ≤ min(requested width, good lanes)`; fewer than `min_width` good lanes → `LINK_DOWN`.
+4. Width: the largest `W ∈ {32, 16, 8}` with `W ≤ min(requested width, good lanes)`; fewer than `min_width` good lanes → `LINK_DOWN`.
 5. Spare lanes not used as data carry the idle PRBS so they stay testable.
 
 ### 5.3 PRBS and deskew

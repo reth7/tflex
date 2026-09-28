@@ -10,7 +10,7 @@
 | Flit formats, CRC polynomial, retry encoding | defined by the specification | **our own** 256-bit flit, CRC-16/CCITT (configurable), go-back-N over a sideband |
 | Sideband | defined messages and wires | abstract reliable message channel with fixed latency; its own errors are out of scope |
 | PHY | analog transmitters/receivers, clocking, valid/track lanes, electrical specs | **digital behavioural abstraction**: 8 bits per lane per link-clock cycle, no UI-level serialization, no signal integrity, no clock recovery; dedicated valid lane assumed fault-free |
-| Lane repair / degradation | redundant lanes and width degradation defined by the spec | compaction-based remapping with configurable spares; width modes 32/24/16/8 (24 is our extension) |
+| Lane repair / degradation | redundant lanes and width degradation defined by the spec | compaction-based remapping with configurable spares; UCIe-style halving width modes 32/16/8 (a 24-lane mode was considered and rejected, see plan.md) |
 | Link training | detailed state machine, parameter exchange | simplified LTSM with our own states and timers |
 | Data rates, energy, reach | spec-defined targets per package type | configuration parameters; energy/bit values are placeholders unless a cited source is added |
 

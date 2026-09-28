@@ -60,7 +60,7 @@ Open-loop mode: `Vtflex --control-file controls.jsonl --record epochs.jsonl` rea
 
 ```json
 {"type":"control","n":43,
- "links":{"A":{"freq_mhz":1500,"width":24,"inj_level":1,"emergency":false,"sensor_c":72.4,
+ "links":{"A":{"freq_mhz":1500,"width":16,"inj_level":1,"emergency":false,"sensor_c":72.4,
                "faults":[{"dir":"ai2mem","mode":"LANE_DEAD","lanes":[13],"at_ns":2500,"duration_ns":0}]}},
  "route":{"mode":"weighted","weight_A":0.30},
  "descriptors":[{"t_rel_ns":0,"src":"AI","dst":"HBM","op":"RD","len":4096,"tclass":"WEIGHT","prio":1,

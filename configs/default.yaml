@@ -33,7 +33,7 @@ link:
   lane_bits: 8                # bits carried per lane per link-clock cycle
                               # (abstracts the deserialized SERDES word; no UI-level model)
   flit_bits: 256              # must equal data_lanes * lane_bits at full width
-  width_modes: [32, 24, 16, 8]   # supported active logical widths (gearbox)
+  width_modes: [32, 16, 8]       # UCIe-style halving; 24-lane mode rejected (docs/plan.md)
   min_width: 8                # below this the link is declared DOWN
   valid_lane: dedicated       # framing/valid track assumed fault-free (see limitations)
   repair_style: shift         # shift | crossbar  (both synthesized for comparison)

@@ -14,7 +14,8 @@ module tb_pkg_sizes;
     chk("body bytes",  BODY_BYTES,         28);
     chk("lane idx w",  LANE_IDX_W,         6);
     chk("lanes*bits",  DATA_LANES * LANE_BITS, FLIT_BITS);
-    chk("w(WM_24)",    int'(width_lanes(WM_24)), 24);
+    chk("w(WM_16)",    int'(width_lanes(WM_16)), 16);
+    chk("w(WM_RSVD)",  int'(width_lanes(WM_RSVD)), 0);
     if (errors == 0) $display("tb_pkg_sizes: PASS"); else $fatal(1, "tb_pkg_sizes: FAIL (%0d)", errors);
     $finish;
   end

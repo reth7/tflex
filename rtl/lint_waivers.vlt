@@ -1,3 +1,5 @@
 `verilator_config
 // Package-level defaults are consumed by modules added in later milestones.
 lint_off -rule UNUSEDPARAM -file "*/tflex_pkg.sv"
+// Package helper functions take whole structs and use only some fields.
+lint_off -rule UNUSEDSIGNAL -file "*/tflex_pkg.sv"

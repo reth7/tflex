@@ -4,6 +4,27 @@
 
 ---
 
+## 0. Experiment IDs (revised 2026-09-28)
+
+The project owner's experiment list is authoritative from Milestone 1 on. Mapping to the Phase 1 IDs used in `configs/experiments.yaml` (the YAML keys will be renamed when the experiment runner is built in M12):
+
+| ID | Experiment | Phase 1 ID |
+|---|---|---|
+| X1 | 2.5D baseline: throughput, latency, power, temperature, completion time | E1 (baseline A) |
+| X2 | Thermal time-scaling sensitivity (at least 50× vs 100×) | X2 |
+| X3 | 3D baseline, compared with 2.5D | E2 (baseline B) |
+| X4 | Thermal throttling vs no thermal control | E3 (baseline C) |
+| X5 | Thermal-aware vs conventional routing | E4 (baseline D) |
+| X6 | Lane fault tolerance: single/multiple failures, locations, recovery time, workload impact | E5 |
+| X7 | Extended vs compact lane mapper, with synthesis data | new (was part of E5 / RQ5) |
+| X8 | Workload comparison: deterministic, bursty, GEMM-like, realistic AI traffic | new (was the workload axis of every experiment) |
+| X9 | Final application validation with a TGAPneumoSeg-derived workload — only after X1–X8 infrastructure is validated | new |
+| — | Thermal model validation and sensitivity | E0 (kept as a prerequisite, not a numbered experiment) |
+| — | Combined system (baseline E) | E6 (kept; feeds RQ6) |
+| — | Retry buffer vs round-trip ablation | old X1 (renamed X1-retry in the YAML to avoid the clash) |
+
+The sections below still use the Phase 1 IDs; read them through this table.
+
 ## 1. Research questions → experiments
 
 | RQ | Question | Primary evidence |
@@ -86,5 +107,5 @@ Recording expectations before running protects against post-hoc storytelling:
 1. 3D runs hotter than 2.5D for the same workload, with the memory die close to the AI die's temperature, and the gap shrinks as the hybrid-bond conductivity rises.
 2. Link-only throttling reduces temperature mainly through the compute stall it causes; the throughput cost will be visible in completion time more than in link bandwidth.
 3. Thermal-aware routing reduces the peak temperature near link A's PHY by a small amount (≈ 1 °C or less) at a latency / energy-per-bit cost from using link B; the γ sweep shows where that tradeoff saturates.
-4. With 4 spares, up to 4 permanent failures cost only retrain time; failure 5 drops the link to 24 lanes (≈ 25 % bandwidth loss plus pads) if `MAX_SHIFT` allows it, otherwise the link goes down.
+4. With 4 spares, up to 4 permanent failures cost only retrain time; failure 5 drops the link to 16 lanes (≈ 50 % bandwidth loss) if `MAX_SHIFT` allows it, otherwise the link goes down.
 5. Retry-buffer stalls appear when `RETRY_DEPTH` is below the ACK round trip (X1).

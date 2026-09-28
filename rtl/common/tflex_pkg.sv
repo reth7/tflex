@@ -155,19 +155,22 @@ package tflex_pkg;
     LT_LINK_DOWN  = 4'd9     // fewer than min_width good lanes
   } ltsm_state_e;
 
+  // Width modes follow UCIe-style halving (32 / 16 / 8). A 24-lane mode was
+  // considered in Phase 1 and rejected (it needs IDLE pad flits in the
+  // gearbox); see docs/plan.md, decision log.
   typedef enum logic [1:0] {
-    WM_32 = 2'd0,
-    WM_24 = 2'd1,
-    WM_16 = 2'd2,
-    WM_8  = 2'd3
+    WM_32   = 2'd0,
+    WM_16   = 2'd1,
+    WM_8    = 2'd2,
+    WM_RSVD = 2'd3     // illegal; asserted against
   } width_mode_e;
 
   function automatic int unsigned width_lanes(width_mode_e wm);
     case (wm)
       WM_32:   return 32;
-      WM_24:   return 24;
       WM_16:   return 16;
-      default: return 8;
+      WM_8:    return 8;
+      default: return 0;
     endcase
   endfunction
 
@@ -195,5 +198,66 @@ package tflex_pkg;
     logic [23:0]            duration;    // 0 = permanent (where meaningful)
     logic [31:0]            ber_thresh;  // FM_RANDOM_BER
   } fault_cmd_t;
+
+  // ---------------------------------------------------------------------------
+  // Milestone 1: streams between packetizer, FIFOs and adapter
+  // ---------------------------------------------------------------------------
+  // Packet item stream (traffic source -> packetizer, depacketizer -> sink):
+  // the first item of a packet (sop) is the pkt_hdr_t, then payload words of
+  // BODY_BYTES bytes each; eop marks the last item of the packet.
+  typedef struct packed {
+    logic                 sop;
+    logic                 eop;
+    logic [BODY_BITS-1:0] data;
+  } pkt_item_t;                                   // 226 bits
+
+  // Flit body carried through the async FIFOs; the adapter adds seq/flags/CRC.
+  typedef struct packed {
+    flit_type_e           ftype;
+    logic [BODY_BITS-1:0] body;
+  } flit_body_t;                                  // 227 bits
+
+  function automatic logic has_payload(pkt_type_e pt);
+    return (pt == PT_WR_REQ) || (pt == PT_RD_RESP);
+  endfunction
+
+  // Bytes of payload a header announces (0 for header-only packet types).
+  function automatic logic [15:0] payload_len(pkt_hdr_t h);
+    return has_payload(h.ptype) ? h.len : 16'd0;
+  endfunction
+
+  // Deterministic payload: every byte is a function of (addr, tag, word index),
+  // so receivers regenerate and compare instead of storing data. xorshift32
+  // mixing only (no multipliers) keeps it cheap in hardware.
+  function automatic logic [31:0] mix32(logic [31:0] x_in);
+    logic [31:0] x;
+    x = x_in;
+    x = x ^ (x << 13);
+    x = x ^ (x >> 17);
+    x = x ^ (x << 5);
+    return x;
+  endfunction
+
+  function automatic logic [BODY_BITS-1:0] payload_word(logic [47:0] addr,
+                                                        logic [15:0] tag,
+                                                        logic [15:0] idx);
+    logic [BODY_BITS-1:0] w;
+    logic [31:0]          seed;
+    seed = addr[31:0] ^ {addr[47:32], 16'h0} ^ {tag, idx} ^ 32'h9E37_79B9;
+    for (int j = 0; j < BODY_BITS / 32; j++) begin
+      w[j*32 +: 32] = mix32(mix32(seed ^ (32'(j) << 24) ^ 32'h1));
+    end
+    return w;
+  endfunction
+
+  // Keep the lowest `nbytes` bytes (1..BODY_BYTES) of a payload word, zero the rest.
+  function automatic logic [BODY_BITS-1:0] keep_bytes(logic [BODY_BITS-1:0] w,
+                                                      logic [5:0] nbytes);
+    logic [BODY_BITS-1:0] r;
+    for (int b = 0; b < BODY_BYTES; b++) begin
+      r[b*8 +: 8] = (6'(b) < nbytes) ? w[b*8 +: 8] : 8'h00;
+    end
+    return r;
+  endfunction
 
 endpackage : tflex_pkg

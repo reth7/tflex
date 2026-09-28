@@ -126,7 +126,7 @@ Per link, evaluated once per epoch:
 |---|---|
 | `T < T1 − H` | step back toward full performance (one level per dwell period) |
 | `T1 ≤ T < T2` | reduce link frequency one level (2000 → 1500 → 1000 → 500 MHz) |
-| `T2 ≤ T < T3` | reduce width one mode (32 → 24 → 16 → 8) |
+| `T2 ≤ T < T3` | reduce width one mode (32 → 16 → 8) |
 | `T ≥ T3` | emergency: injection gated to the lowest level |
 | `T ≥ hw_trip` | RTL comparator gates injection within the epoch, independent of the policy |
 
