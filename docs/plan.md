@@ -1,11 +1,11 @@
 # T-FLEX Plan: Milestones, Risks, Setup, Open Decisions
 
-**Status:** Milestone 1 complete (2026-09-28), awaiting approval before Milestone 2. Report: [results/reports/m1_report.md](../results/reports/m1_report.md).
+__Status:__ Milestone 1 complete (2026-09-28), awaiting approval before Milestone 2. Report: [results/reports/m1_report.md](../results/reports/m1_report.md).
 
 | Milestone | Status | Evidence |
 |---|---|---|
 | Phase 1 — specification | done | this document set |
-| M1 — CDC + basic link datapath | **done** | `make test`: 60/60 regression runs pass; m1_report.md |
+| M1 — CDC + basic link datapath | __done__ | `make test`: 60/60 regression runs pass; m1_report.md |
 | M2 — CRC / retry + minimal fault injection | not started | — |
 
 ## 0. Decision log (approved by the project owner, 2026-09-28)
@@ -15,11 +15,32 @@
 3. **Thermal granularity:** 4 × 4 tiles per die by default; the 5-node lumped model stays as a baseline/reference.
 4. **Milestone adjustments accepted:** async FIFO in M1, minimal injector in M2 (CRC corruption, single-bit corruption, selected lane failure), fixed-mask repair in M3, live detection/retraining + first synthesis (sv2v → Yosys) in M4.
 5. **24-lane mode rejected.** Widths are 32 / 16 / 8 (UCIe-style halving); no padding flits. Documented as a rejected alternative in protocol.md §5.1.
-6. **Mappers:** the extended mapper (`MAX_SHIFT = P − W_min`) is the primary research mapper; the compact mapper (5:1 muxes, ≤ 4 failures) is also implemented. X7 compares area, timing, mux/resources, supported fault count, flexibility (and power if the flow gives it) from measured synthesis; no winner is chosen in advance.
+6. __Mappers:__ the extended mapper (`MAX_SHIFT = P − W_min`) is the primary research mapper; the compact mapper (5:1 muxes, ≤ 4 failures) is also implemented. X7 compares area, timing, mux/resources, supported fault count, flexibility (and power if the flow gives it) from measured synthesis; no winner is chosen in advance.
 7. **Python power/thermal models may be developed in parallel** with the RTL milestones, runnable on synthetic activity traces, and are not coupled to the RTL until the activity schema is stable.
-8. **Progressive workloads:** Stage 0 (deterministic / random / bursty traffic, no AI) → Stage 1 (synthetic compute phases: weight load, compute, activation load, output store) → Stage 2 (CNN- and attention-like traffic) → Stage 3 (TGAPneumoSeg-derived workload, application-level validation only, never before the earlier stages are validated).
-9. **Expected ~1 °C routing benefit is a hypothesis, not a target.** Whatever the simulation shows is reported.
+8. **Progressive workloads:** Stage 0 — Synthetic communication traffic
+    deterministic / random / bursty
 
+Stage 1 — Synthetic compute
+    weight load
+    activation load
+    GEMM-like compute
+    output store
+
+Stage 2 — Thermal stress workloads
+    compute-heavy
+    bandwidth-heavy
+    bursty
+    memory-bound
+    compute-bound
+
+Stage 3 — Final architectural experiments
+    2.5D vs 3D
+    thermal control
+    thermal-aware routing
+    lane faults
+    frequency/width scaling
+
+9. **Expected ~1 °C routing benefit is a hypothesis, not a target.** Whatever the simulation shows is reported.
 
 ---
 
@@ -29,10 +50,10 @@ The brief's 12 milestones are kept in order. Four small adjustments (marked ◆)
 
 | M | Scope | New RTL / code | Exit tests |
 |---|---|---|---|
-| 1 ✔ | Basic transmission: descriptor-driven accelerator → packetizer → TX → channel → RX → SRAM model, one link, full width, no CRC/retry. ◆ **Async FIFO and reset synchronizers included** so core / link / mem run at different clocks from day one (retrofitting domains later would change every interface). | `reset_sync, sync_2ff, sync_fifo, async_fifo, packetizer, depacketizer, accel_model (directed descriptors), mem_sram_model, simple phy passthrough, d2d_channel`; Python golden packetizer; Dockerfile | packet round trips at lengths 0…65535; async FIFO random clock ratios; payload signatures match; SVA stream rules |
-| 2 | CRC, retry, flow control. ◆ **Minimal fault injector (bit flip, burst, CRC corrupt)** — retry cannot be tested without errors; the full injector stays in M4. | `crc, retry_tx, retry_rx, credit_return, sb_mux, sideband_channel, fault_injector (subset)` | CRC vectors + 10⁵ random; retry matrix (verification.md §3); no loss / duplication / reordering; credit invariants; retry count, retry latency, throughput degradation measured |
-| 3 | 32 + 4 lanes, gearbox (32/16/8), lane mapper (extended + compact), lane failure, repair controller. ◆ **Repair is exercised statically here** (bad mask set at link bring-up, dead lanes injected, traffic must flow around them); dynamic detection needs training, which is M4. | `gearbox_tx/rx, lane_map_tx/rx, lane_repair_ctrl` (+ `MAX_SHIFT` variants) | exhaustive ≤ 4-failure masks in Python, sampled in RTL; degraded widths; bandwidth ratio per width |
-| 4 | Link training, deskew, full error injection, CDC stress. Dynamic repair: failure → NAKs → retrain → LANE_CHECK → remap → resume. ◆ **First synthesis run** of adapter + PHY so synthesizability problems surface early, not at the end. | `ltsm, prbs_gen/chk, deskew, fault_injector (all modes), cdc_handshake`; `syn/` scripts | LTSM matrix; each fault mode; repair latency measured; CDC randomized; Yosys reports |
+| 1 ✔ | Basic transmission: descriptor-driven accelerator → packetizer → TX → channel → RX → SRAM model, one link, full width, no CRC/retry. ◆ __Async FIFO and reset synchronizers included__ so core / link / mem run at different clocks from day one (retrofitting domains later would change every interface). | `reset_sync, sync_2ff, sync_fifo, async_fifo, packetizer, depacketizer, accel_model (directed descriptors), mem_sram_model, simple phy passthrough, d2d_channel`; Python golden packetizer; Dockerfile | packet round trips at lengths 0…65535; async FIFO random clock ratios; payload signatures match; SVA stream rules |
+| 2 | CRC, retry, flow control. ◆ __Minimal fault injector (bit flip, burst, CRC corrupt)__ — retry cannot be tested without errors; the full injector stays in M4. | `crc, retry_tx, retry_rx, credit_return, sb_mux, sideband_channel, fault_injector (subset)` | CRC vectors + 10⁵ random; retry matrix (verification.md §3); no loss / duplication / reordering; credit invariants; retry count, retry latency, throughput degradation measured |
+| 3 | 32 + 4 lanes, gearbox (32/16/8), lane mapper (extended + compact), lane failure, repair controller. ◆ __Repair is exercised statically here__ (bad mask set at link bring-up, dead lanes injected, traffic must flow around them); dynamic detection needs training, which is M4. | `gearbox_tx/rx, lane_map_tx/rx, lane_repair_ctrl` (+ `MAX_SHIFT` variants) | exhaustive ≤ 4-failure masks in Python, sampled in RTL; degraded widths; bandwidth ratio per width |
+| 4 | Link training, deskew, full error injection, CDC stress. Dynamic repair: failure → NAKs → retrain → LANE_CHECK → remap → resume. ◆ __First synthesis run__ of adapter + PHY so synthesizability problems surface early, not at the end. | `ltsm, prbs_gen/chk, deskew, fault_injector (all modes), cdc_handshake`; `syn/` scripts | LTSM matrix; each fault mode; repair latency measured; CDC randomized; Yosys reports |
 | 5 | 2.5D topology: links S, A, B, HBM-like model, route select (static), path merge, CSR block, C++ harness with epochs and open-loop JSONL | `mem_hbm_model, route_select, path_merge, csr, system_top`; `sim/harness` | all links concurrently; frontdoor vs backdoor reads agree; open-loop replay deterministic |
 | 6 | 3D topology parameters, config loader with inheritance/overrides | Python config package | both topologies pass the M5 suite; resolved configs recorded |
 | 7 | Python workload generator + workload engine (phases, dependencies, roofline compute progress), closed-loop protocol without thermal | `python/tflex/workload`, `python/tflex/cosim` | generator determinism; byte totals; closed-loop = open-loop replay |
@@ -44,7 +65,7 @@ The brief's 12 milestones are kept in order. Four small adjustments (marked ◆)
 
 Parallel track (approved, decision 7): M8 and M9 are pure Python and may be built alongside M2–M4 against synthetic activity traces.
 
-**M1 as delivered vs. the row above:** traffic source/sink modules (`tflex_traffic_src/sink`) stand in for the accelerator and SRAM models, which arrive with the topologies in M5; a minimal credit loop was added so backpressure could be tested (see m1_report.md §1); the Python golden packetizer and the Dockerfile were not needed for the M1 tests and move to M2 (golden CRC/packet model) and M5 (Dockerfile) respectively.
+__M1 as delivered vs. the row above:__ traffic source/sink modules (`tflex_traffic_src/sink`) stand in for the accelerator and SRAM models, which arrive with the topologies in M5; a minimal credit loop was added so backpressure could be tested (see m1_report.md §1); the Python golden packetizer and the Dockerfile were not needed for the M1 tests and move to M2 (golden CRC/packet model) and M5 (Dockerfile) respectively.
 
 ## 2. Technical risks
 
@@ -74,7 +95,7 @@ Verified in this Phase 1 environment (Ubuntu 24.04, 2 CPU cores, 7 GB RAM, Pytho
 | Component | Version | How | Phase 1 check |
 |---|---|---|---|
 | Verilator | 5.020 (Ubuntu package) | apt | SV package + concurrent assertion + `--binary --timing` testbench compiled and ran |
-| Yosys | 0.33 | apt | native SV frontend **rejected** a package function with initialized locals; via sv2v it synthesized (713 cells for a CRC test module) |
+| Yosys | 0.33 | apt | native SV frontend __rejected__ a package function with initialized locals; via sv2v it synthesized (713 cells for a CRC test module) |
 | sv2v | 0.0.13 | GitHub release binary → `.tools/` | converted the package + test module |
 | Icarus Verilog | apt | apt | installed; secondary smoke simulator only |
 | cocotb | 1.9.2 | pip | one cocotb test on Verilator 5.020 passed |
