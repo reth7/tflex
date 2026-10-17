@@ -44,6 +44,8 @@ Deviation from the brief's layout: Python lives in an importable package (`pytho
 make check-env
 make lint                # Verilator lint + sv2v/Yosys parse
 make test                # package checks + Milestone 1 regression (60 runs)
+make wave                # build/wave/link_m1_single.fst (traced tb_link_m1, nominal clocks)
+make diagram             # build/diagram/*.svg (Yosys netlist views, needs graphviz)
 ```
 
 Reference environment: Ubuntu 24.04, Verilator 5.020, Yosys 0.33, sv2v 0.0.13, Python 3.11, cocotb 1.9.2 (pinned in `requirements.txt`).

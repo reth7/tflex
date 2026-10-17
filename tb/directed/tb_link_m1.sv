@@ -6,9 +6,11 @@
 //                         -> adapter_rx -> RX FIFO (credits via sideband)
 //   clk_mem:  ->| depacketizer -> traffic_sink (payload check)
 //
-// Plusargs: +TEST=<single|burst|sustained|backpressure|reset>
+// Plusargs: +TEST=<single|burst|sustained|backpressure|reset|wave>
 //           +CORE_PS= +LINK_PS= +MEM_PS= (clock periods)  +CFG=<label>
 //           +SINK_PCT=<0..100> (backpressure test only) +NPKT=<n>
+//           +trace (only in a build with -DTFLEX_WAVE --trace-fst, `make wave`):
+//           dump all signals to build/wave/link_m1_single.fst
 // Seeded with +verilator+seed+<n>.
 //
 // Checks: every packet arrives exactly once, in order, with correct header
@@ -46,6 +48,14 @@ module tb_link_m1;
       begin #(longint'(311)); forever #(hm) clk_mem  = ~clk_mem;  end
     join_none
   end
+
+`ifdef TFLEX_WAVE
+  // Waveform dump for `make wave`; compiled out of the regression build.
+  initial if ($test$plusargs("trace")) begin
+    $dumpfile("build/wave/link_m1_single.fst");
+    $dumpvars(0, tb_link_m1);
+  end
+`endif
 
   tflex_reset_sync u_rs_core (.clk(clk_core), .arst_n, .rst_n_o(rst_core_n));
   tflex_reset_sync u_rs_link (.clk(clk_link), .arst_n, .rst_n_o(rst_link_n));
@@ -229,6 +239,14 @@ module tb_link_m1;
         gate_one_at_a_time = 1;
         pend_q.push_back(mk(PT_RD_REQ, 64));
         foreach (lens[i]) pend_q.push_back(mk(PT_WR_REQ, lens[i]));
+        run_until_done(1_000_000);
+      end
+      "wave": begin
+        // Short `single`-style run for waveform viewing: one 256 B write, then
+        // one 4096 B write, each on an idle link.
+        gate_one_at_a_time = 1;
+        pend_q.push_back(mk(PT_WR_REQ, 256));
+        pend_q.push_back(mk(PT_WR_REQ, 4096));
         run_until_done(1_000_000);
       end
       "burst": begin
