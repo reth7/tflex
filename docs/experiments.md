@@ -18,7 +18,7 @@ The project owner's experiment list is authoritative from Milestone 1 on. Mappin
 | X6 | Lane fault tolerance: single/multiple failures, locations, recovery time, workload impact | E5 |
 | X7 | Extended vs compact lane mapper, with synthesis data | new (was part of E5 / RQ5) |
 | X8 | Workload comparison: deterministic, bursty, GEMM-like, realistic AI traffic | new (was the workload axis of every experiment) |
-| X9 | Final application validation with a TGAPneumoSeg-derived workload — only after X1–X8 infrastructure is validated | new |
+| X9 | Final application validation with a custom workload — only after X1–X8 infrastructure is validated | new |
 | — | Thermal model validation and sensitivity | E0 (kept as a prerequisite, not a numbered experiment) |
 | — | Combined system (baseline E) | E6 (kept; feeds RQ6) |
 | — | Retry buffer vs round-trip ablation | old X1 (renamed X1-retry in the YAML to avoid the clash) |
