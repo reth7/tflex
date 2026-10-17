@@ -55,7 +55,7 @@ flowchart LR
 
 ASCII fallback (one direction of one link, AI → HBM write):
 
-```
+```ml
  clk_core                         | clk_link_A                                                                   | clk_mem
  accel -> route -> packetizer -> [async FIFO] -> retry_tx -> gearbox_tx -> lane_map_tx -> injector -> channel ->   |
                                   |           (seq, CRC,    (width      (36 phys     (faults)    (latency,       |
@@ -90,9 +90,9 @@ Credit return is derived from the RX async FIFO's synchronized read pointer, so 
 
 ## 4. RTL module catalogue
 
-**Implementation status (Milestone 1).** Implemented and tested: `tflex_pkg`, `tflex_reset_sync`, `tflex_sync_bits` (the synchronizer called `tflex_sync_2ff` below; metastability-delay option deferred to M4), `tflex_delay_line` (new: shared fixed-latency pipe), `tflex_async_fifo`, `tflex_pkt_len_check` (new: framing checker shared by packetizer and depacketizer), `tflex_packetizer`, `tflex_depacketizer`, `tflex_adapter_tx` / `tflex_adapter_rx` (credit flow control only; they become the retry engines of §4.2 in M2), `tflex_credit_return`, `tflex_phy_tx` / `tflex_phy_rx` (full width, identity map), `tflex_d2d_channel` (latency only), `tflex_sideband_channel` (carries credit counts until `sb_msg_t` arrives in M2), `tflex_d2d_link_simplex` (new: one direction across three clock domains), and `tflex_traffic_src` / `tflex_traffic_sink` (new: stand-ins for the accelerator/memory packet paths until M5). The packetizer consumes a packet *item stream* (`pkt_item_t`: header item, then 28-byte payload items, with sop/eop) rather than separate header and payload ports. See results/reports/m1_report.md.
+__Implementation status (Milestone 1).__ Implemented and tested: `tflex_pkg`, `tflex_reset_sync`, `tflex_sync_bits` (the synchronizer called `tflex_sync_2ff` below; metastability-delay option deferred to M4), `tflex_delay_line` (new: shared fixed-latency pipe), `tflex_async_fifo`, `tflex_pkt_len_check` (new: framing checker shared by packetizer and depacketizer), `tflex_packetizer`, `tflex_depacketizer`, `tflex_adapter_tx` / `tflex_adapter_rx` (credit flow control only; they become the retry engines of §4.2 in M2), `tflex_credit_return`, `tflex_phy_tx` / `tflex_phy_rx` (full width, identity map), `tflex_d2d_channel` (latency only), `tflex_sideband_channel` (carries credit counts until `sb_msg_t` arrives in M2), `tflex_d2d_link_simplex` (new: one direction across three clock domains), and `tflex_traffic_src` / `tflex_traffic_sink` (new: stand-ins for the accelerator/memory packet paths until M5). The packetizer consumes a packet _item stream_ (`pkt_item_t`: header item, then 28-byte payload items, with sop/eop) rather than separate header and payload ports. See results/reports/m1_report.md.
 
-Conventions: all modules are SystemVerilog, parameterized, synthesizable unless marked **[sim]**. Streams use `*_valid / *_ready / *_data` (a transfer happens when both are high; `valid` must not depend combinationally on `ready`; data must hold while `valid && !ready`). Active-low async reset `rst_n`, synchronized per domain by `tflex_reset_sync`. Names are prefixed `tflex_`.
+Conventions: all modules are SystemVerilog, parameterized, synthesizable unless marked __[sim]__. Streams use `*_valid / *_ready / *_data` (a transfer happens when both are high; `valid` must not depend combinationally on `ready`; data must hold while `valid && !ready`). Active-low async reset `rst_n`, synchronized per domain by `tflex_reset_sync`. Names are prefixed `tflex_`.
 
 ### 4.1 `rtl/common`
 
@@ -100,7 +100,7 @@ Conventions: all modules are SystemVerilog, parameterized, synthesizable unless 
 |---|---|---|---|
 | `tflex_pkg` | Types, enums, defaults (exists, Phase 1) | — | — |
 | `tflex_reset_sync` | Async assert / sync deassert reset per domain | `STAGES=2` | `clk, arst_n → rst_n` |
-| `tflex_sync_2ff` | Bit synchronizer; optional **[sim]** random extra-cycle delay (`SIM_METASTABILITY`) to emulate settling uncertainty | `WIDTH, STAGES` | `clk, d → q` |
+| `tflex_sync_2ff` | Bit synchronizer; optional __[sim]__ random extra-cycle delay (`SIM_METASTABILITY`) to emulate settling uncertainty | `WIDTH, STAGES` | `clk, d → q` |
 | `tflex_sync_fifo` | Single-clock FIFO | `WIDTH, DEPTH` | `in_valid/ready/data, out_valid/ready/data, count` |
 | `tflex_async_fifo` | Dual-clock FIFO (Cummings-style Gray pointers) | `WIDTH, DEPTH (pow2), SYNC_STAGES` | `wclk, wrst_n, w_valid/ready/data; rclk, rrst_n, r_valid/ready/data; w_count, r_count; r_ptr_gray_sync_w (for credits)` |
 | `tflex_cdc_handshake` | Multi-bit quasi-static transfer with req/ack | `WIDTH` | `sclk, s_valid, s_data, s_busy; dclk, d_pulse, d_data` |
@@ -140,8 +140,8 @@ Conventions: all modules are SystemVerilog, parameterized, synthesizable unless 
 | Module | Purpose |
 |---|---|
 | `tflex_d2d_endpoint` | One side of one link: TX async FIFO, adapter TX/RX, PHY TX/RX, LTSM, repair controller, sideband mux, stats block. Instantiated twice per link. |
-| `tflex_d2d_channel` **[sim]** | Physical medium abstraction, one direction: per-lane pipeline delay (`LATENCY` + per-lane skew), hosts the fault injector. Synthesizable shift registers but not meant to be synthesized as part of a die. |
-| `tflex_sideband_channel` **[sim]** | Reliable fixed-latency message pipe, both directions. |
+| `tflex_d2d_channel` __[sim]__ | Physical medium abstraction, one direction: per-lane pipeline delay (`LATENCY` + per-lane skew), hosts the fault injector. Synthesizable shift registers but not meant to be synthesized as part of a die. |
+| `tflex_sideband_channel` __[sim]__ | Reliable fixed-latency message pipe, both directions. |
 | `tflex_d2d_link` | Endpoint ↔ channel ↔ endpoint, both directions, plus sideband. Parameterized by `LATENCY`, skew list, lane counts. |
 
 ### 4.5 `rtl/fault`
@@ -149,7 +149,7 @@ Conventions: all modules are SystemVerilog, parameterized, synthesizable unless 
 | Module | Purpose |
 |---|---|
 | `tflex_fault_injector` | Applies `fault_cmd_t` commands (bit flip, burst, stuck-at-0/1, dead lane, packet corruption, CRC corruption, temporary link-down, random BER) to the channel's lane data, with an internal free-running cycle counter and LFSRs. Up to `N_CMDS` concurrent commands. |
-| `tflex_fault_scheduler` **[sim]** | Queue of timestamped commands loaded through CSR. |
+| `tflex_fault_scheduler` __[sim]__ | Queue of timestamped commands loaded through CSR. |
 
 ### 4.6 `rtl/routing`
 
@@ -171,7 +171,7 @@ Conventions: all modules are SystemVerilog, parameterized, synthesizable unless 
 |---|---|
 | `tflex_accel_model` | Descriptor-driven traffic engine (DMA-like). Descriptors (`src, dst, op, len, tclass, prio, addr, tag`) arrive from the harness; the engine emits WR_REQ/RD_REQ packets, tracks up to `MAX_OUTSTANDING` reads, checks RD_RESP payload signatures, and reports completions (tag, latency). No compute datapath: compute is modeled in Python (§7). |
 | `tflex_mem_sram_model` | Fixed-latency SRAM chiplet model: checks WR payload signatures, returns WR_ACK; serves RD_REQ with `LFSR(addr, tag)` payload after `read_latency`. Synthesizable. |
-| `tflex_mem_hbm_model` **[sim]** | HBM-like model: banks, bank-busy time, service-rate token bucket, configurable latency. Not an HBM protocol model. |
+| `tflex_mem_hbm_model` __[sim]__ | HBM-like model: banks, bank-busy time, service-rate token bucket, configurable latency. Not an HBM protocol model. |
 | `tflex_csr` | 32-b APB-lite register file in `clk_core`; control fan-out and stats snapshot collection through the CDC handshakes. Register map in cosim_interface.md §4. |
 | `tflex_chiplet_ai`, `tflex_chiplet_mem` | Structural wrappers per die. |
 | `tflex_system_top` | AI + SRAM + HBM chiplets, links S/A/B, CSR. Parameter `TOPO` only selects defaults; everything is overridable. |
@@ -186,7 +186,7 @@ Physical lanes per direction: `P = L + S = 32 + 4 = 36`, plus one dedicated vali
 - `map[l] ≥ l` and `map[l] − l` = number of bad lanes below `map[l]` (a "shift");
 - spares remaining at full width `= P − 32 − popcount(bad)`.
 
-**Datapath:** TX is a mux per physical lane (physical `p` selects logical `j ∈ [p − MAX_SHIFT, p]`); RX is a mux per logical lane (logical `l` selects physical `p ∈ [l, l + MAX_SHIFT]`). `MAX_SHIFT` is the area/capability knob:
+__Datapath:__ TX is a mux per physical lane (physical `p` selects logical `j ∈ [p − MAX_SHIFT, p]`); RX is a mux per logical lane (logical `l` selects physical `p ∈ [l, l + MAX_SHIFT]`). `MAX_SHIFT` is the area/capability knob:
 
 | `MAX_SHIFT` | Mux size | Supports |
 |---|---|---|
@@ -195,9 +195,9 @@ Physical lanes per direction: `P = L + S = 32 + 4 = 36`, plus one dedicated vali
 
 Both variants will be synthesized (area/timing comparison is a planned hardware result). A table-driven 36:1 crossbar (`repair_style: crossbar`) is kept as a third option for non-monotonic policies (e.g. steering around hot lanes); it is optional.
 
-**When the map changes:** only in LTSM state `REPAIR`, with TX quiesced and both ends committing via `SB_MAP_COMMIT`. An assertion requires `map` stable whenever `state == ACTIVE`.
+__When the map changes:__ only in LTSM state `REPAIR`, with TX quiesced and both ends committing via `SB_MAP_COMMIT`. An assertion requires `map` stable whenever `state == ACTIVE`.
 
-**Width modes vs failures:** after LANE_CHECK the repair controller picks the largest `W ∈ {32, 16, 8}` with `W ≤ min(requested_width, good_lanes)` (the thermal controller may request a narrower width). Fewer than `min_width` good lanes → `LINK_DOWN`.
+__Width modes vs failures:__ after LANE_CHECK the repair controller picks the largest `W ∈ {32, 16, 8}` with `W ≤ min(requested_width, good_lanes)` (the thermal controller may request a narrower width). Fewer than `min_width` good lanes → `LINK_DOWN`.
 
 ## 6. 2.5D and 3D mapping onto the same RTL
 
