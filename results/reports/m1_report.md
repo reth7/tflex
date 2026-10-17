@@ -4,7 +4,7 @@
 All numbers below are **SIMULATED** (Verilator 5.020 RTL simulation of this repository) unless labeled **ANALYTICAL**. They describe this RTL at the stated clock periods; they are not silicon or timing claims.
 *T-FLEX is a UCIe-inspired research architecture, not a UCIe implementation.*
 
-Reproduce: `make check-env && make lint && make test` (full regression ≈ 15 s after the build on a 2-core machine). Raw results: `results/reports/m1_test_summary.txt`, `results/raw/m1/m1_results.csv`.
+Reproduce: `make check-env && make lint && make test` (full regression ≈ 15 s after the build on a 2-core machine; 5.14 s on the 16-thread WSL2 machine of §6). Raw results: `results/reports/m1_test_summary.txt`, `results/raw/m1/m1_results.csv`.
 
 ## 1. What was implemented
 
@@ -114,3 +114,23 @@ The minimum (~12 ns) is the fixed pipeline: FIFO synchronizers on both crossings
 ## 5. Next milestone (M2, not started)
 
 CRC-16 generation/check, sequence numbers, go-back-N retry with the replay buffer, `sb_msg_t` sideband (ACK/NAK/credits), minimal fault injector (CRC corruption, single-bit corruption, selected lane failure); measurements: packet latency, retry count, throughput, error-recovery latency, dropped/duplicated packets.
+
+## 6. Re-verification on a second machine (2026-10-17)
+
+Environment: Ubuntu 24.04.2 LTS under WSL2 (kernel 5.15.167.4-microsoft-standard-WSL2), 16 hardware threads, 7 GiB RAM; Verilator 5.020, Yosys 0.33, sv2v v0.0.13, GNU Make 4.3, g++ 13.3.0; Python 3.12.3 venv with the pinned `requirements.txt` (all eight packages installed at the pinned versions; the pins had been verified only on Python 3.11).
+
+Two repository defects introduced after the M1 commit blocked the run and were fixed (no RTL behaviour or test change):
+
+- `ab53fb4` cleared the executable bit on every `scripts/*` file, so `make check-env` / `make test-m1` failed with "Permission denied" — restored in `5a31e76`.
+- `cc7fe59` removed the trailing newline of `rtl/common/tflex_delay_line.sv`; Verilator `-Wall` reports `EOFNEWLINE` and `make lint` and the testbench builds fail — restored in `432f387` (file byte-identical to the M1 version).
+
+Results from a clean tree (`make clean`, then each step):
+
+| Step | Result | Wall time (measured) |
+|---|---|---|
+| `make check-env` | Environment OK | — |
+| `make lint` | PASS | 3.43 s |
+| build of the 3 testbench binaries | OK | 20.86 s |
+| `make test` | `tb_pkg_sizes: PASS`; `M1 regression: 60 passed, 0 failed` | 5.14 s |
+
+`results/reports/m1_test_summary.txt` regenerated on this machine is **byte-identical** to the committed 2026-09-28 file, so every SIMULATED number in §3 reproduces exactly. The per-packet latencies in §3 were also re-checked against `build/m1_latency_nominal.csv` from the rerun and match. The mutation check of §2 was **not** re-run on this machine.

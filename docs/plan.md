@@ -5,7 +5,7 @@ __Status:__ Milestone 1 complete (2026-09-28), awaiting approval before Mileston
 | Milestone | Status | Evidence |
 |---|---|---|
 | Phase 1 — specification | done | this document set |
-| M1 — CDC + basic link datapath | __done__ | `make test`: 60/60 regression runs pass; m1_report.md |
+| M1 — CDC + basic link datapath | __done__ | `make test`: 60/60 regression runs pass; m1_report.md; re-verified 2026-10-17 on WSL2, results byte-identical (m1_report.md §6) |
 | M2 — CRC / retry + minimal fault injection | not started | — |
 
 ## 0. Decision log (approved by the project owner, 2026-09-28)
@@ -102,6 +102,8 @@ Verified in this Phase 1 environment (Ubuntu 24.04, 2 CPU cores, 7 GB RAM, Pytho
 | numpy / scipy / pandas / matplotlib / networkx / PyYAML / pytest | 2.4.4 / 1.17.1 / 3.0.2 / 3.10.9 / 3.6.1 / 6.0.3 / 9.1.1 | pip, pinned in `requirements.txt` | imported |
 | Liberty files | Nangate45 typical, sky130hd tt | `scripts/fetch_liberty.sh` (OpenROAD-flow-scripts repo) | URL reachable; not downloaded yet |
 | OpenSTA / OpenROAD | — | not in apt; optional source build later | not installed; synthesis numbers will be labeled pre-layout |
+
+Also verified on 2026-10-17 on Ubuntu 24.04.2 under WSL2 (16 threads, 7 GiB RAM, Python 3.12.3): same Verilator / Yosys / sv2v versions (Yosys and sv2v in `/usr/local/bin`), all pinned Python packages install on 3.12; Python 3.12 needs the `python3.12-venv` apt package for the venv. Results: m1_report.md §6.
 
 Commands: `./scripts/setup_env.sh` (apt, sv2v, venv — ran successfully in 42 s here), then `make check-env`, `make lint`, `make test`. A pinned `Dockerfile` (ubuntu:24.04) is planned in M1 for machines other than this one; macOS via Homebrew would bring a newer Verilator and is untested.
 
