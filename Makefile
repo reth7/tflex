@@ -1,5 +1,6 @@
 # T-FLEX top-level Makefile
-# Implemented: check-env, lint, test (package checks + Milestone 1 regression),
+# Implemented: check-env, lint, test (pytest golden models, package checks,
+# Milestone 1 regression),
 # wave (FST dump of a short link run), diagram (Yosys netlist SVGs).
 # Other targets become real as milestones land (docs/plan.md).
 
@@ -33,14 +34,15 @@ TB_WAIVE  := -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-SYNCASYNCNET -Wno-BLKSEQ \
              -Wno-UNUSEDSIGNAL -Wno-DECLFILENAME
 VFLAGS    := $(WAIVERS) --timing --assert --timescale 1ps/1ps -Wall $(TB_WAIVE) -j 2
 
-.PHONY: help check-env setup lint test test-m1 wave diagram simulate experiment plots synth clean
+.PHONY: help check-env setup lint test test-py test-m1 wave diagram simulate experiment plots synth clean
 
 help:
 	@echo "Targets:"
 	@echo "  setup       install tools + Python venv (scripts/setup_env.sh)"
 	@echo "  check-env   report tool versions"
 	@echo "  lint        Verilator -Wall lint of every RTL top + sv2v/Yosys elaboration"
-	@echo "  test        package checks + Milestone 1 regression"
+	@echo "  test        Python golden models + package checks + Milestone 1 regression"
+	@echo "  test-py     Python golden-model tests (pytest)"
 	@echo "  test-m1     Milestone 1 regression only"
 	@echo "  wave        FST waveform of tb_link_m1 (nominal clocks, 256 B + 4096 B)"
 	@echo "  diagram     Yosys netlist SVGs of the link, phy_tx and async FIFO"
@@ -85,8 +87,11 @@ $(BUILD)/tb_link_m1/Vtb_link_m1: $(RTL_SRCS) $(SVA_SRCS) tb/directed/tb_link_m1.
 	  $(RTL_SRCS) $(SVA_SRCS) tb/directed/tb_link_m1.sv > $(BUILD)/tb_link_m1.build.log
 
 # ------------------------------------------------------------------ tests
-test: $(BUILD)/tb_pkg_sizes/Vtb_pkg_sizes test-m1
+test: test-py $(BUILD)/tb_pkg_sizes/Vtb_pkg_sizes test-m1
 	./$(BUILD)/tb_pkg_sizes/Vtb_pkg_sizes
+
+test-py:
+	$(PY) -m pytest -q
 
 test-m1: $(BUILD)/tb_async_fifo/Vtb_async_fifo $(BUILD)/tb_link_m1/Vtb_link_m1
 	./scripts/run_m1_tests.sh
