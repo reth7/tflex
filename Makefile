@@ -1,6 +1,6 @@
 # T-FLEX top-level Makefile
 # Implemented: check-env, lint, test (pytest golden models, package checks,
-# Milestone 1 regression),
+# Milestone 1 and 2 regressions),
 # wave (FST dump of a short link run), diagram (Yosys netlist SVGs).
 # Other targets become real as milestones land (docs/plan.md).
 
@@ -16,6 +16,7 @@ RTL_PKG   := rtl/common/tflex_pkg.sv
 RTL_SRCS  := $(RTL_PKG) \
              rtl/common/tflex_reset_sync.sv rtl/common/tflex_sync_bits.sv \
              rtl/common/tflex_delay_line.sv rtl/common/tflex_async_fifo.sv \
+             rtl/common/tflex_crc.sv \
              rtl/adapter/tflex_pkt_len_check.sv rtl/adapter/tflex_packetizer.sv \
              rtl/adapter/tflex_depacketizer.sv rtl/adapter/tflex_adapter_tx.sv \
              rtl/adapter/tflex_adapter_rx.sv rtl/adapter/tflex_credit_return.sv \
@@ -24,7 +25,7 @@ RTL_SRCS  := $(RTL_PKG) \
              rtl/link/tflex_d2d_link_simplex.sv \
              rtl/top/tflex_traffic_src.sv rtl/top/tflex_traffic_sink.sv
 LINT_TOPS := tflex_d2d_link_simplex tflex_traffic_src tflex_traffic_sink \
-             tflex_packetizer tflex_depacketizer tflex_reset_sync
+             tflex_packetizer tflex_depacketizer tflex_reset_sync tflex_crc
 SVA_SRCS  := tb/assertions/tflex_stream_sva.sv tb/assertions/tflex_async_fifo_sva.sv \
              tb/assertions/tflex_link_m1_sva.sv
 
@@ -34,16 +35,17 @@ TB_WAIVE  := -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-SYNCASYNCNET -Wno-BLKSEQ \
              -Wno-UNUSEDSIGNAL -Wno-DECLFILENAME
 VFLAGS    := $(WAIVERS) --timing --assert --timescale 1ps/1ps -Wall $(TB_WAIVE) -j 2
 
-.PHONY: help check-env setup lint test test-py test-m1 wave diagram simulate experiment plots synth clean
+.PHONY: help check-env setup lint test test-py test-m1 test-m2 wave diagram simulate experiment plots synth clean
 
 help:
 	@echo "Targets:"
 	@echo "  setup       install tools + Python venv (scripts/setup_env.sh)"
 	@echo "  check-env   report tool versions"
 	@echo "  lint        Verilator -Wall lint of every RTL top + sv2v/Yosys elaboration"
-	@echo "  test        Python golden models + package checks + Milestone 1 regression"
+	@echo "  test        Python golden models + package checks + M1 and M2 regressions"
 	@echo "  test-py     Python golden-model tests (pytest)"
 	@echo "  test-m1     Milestone 1 regression only"
+	@echo "  test-m2     Milestone 2 regression only"
 	@echo "  wave        FST waveform of tb_link_m1 (nominal clocks, 256 B + 4096 B)"
 	@echo "  diagram     Yosys netlist SVGs of the link, phy_tx and async FIFO"
 	@echo "  simulate    [M5+]  system simulation"
@@ -86,8 +88,17 @@ $(BUILD)/tb_link_m1/Vtb_link_m1: $(RTL_SRCS) $(SVA_SRCS) tb/directed/tb_link_m1.
 	verilator --binary $(VFLAGS) --Mdir $(BUILD)/tb_link_m1 --top-module tb_link_m1 \
 	  $(RTL_SRCS) $(SVA_SRCS) tb/directed/tb_link_m1.sv > $(BUILD)/tb_link_m1.build.log
 
+CRC_NVEC  := 100000
+$(BUILD)/crc_vectors.txt: scripts/gen_crc_vectors.py python/tflex/protocol/crc.py
+	@mkdir -p $(BUILD)
+	$(PY) scripts/gen_crc_vectors.py $(CRC_NVEC) 1 $@
+
+$(BUILD)/tb_crc/Vtb_crc: $(RTL_PKG) rtl/common/tflex_crc.sv tb/directed/tb_crc.sv
+	@mkdir -p $(BUILD)
+	verilator --binary $(VFLAGS) --Mdir $(BUILD)/tb_crc --top-module tb_crc $^ > $(BUILD)/tb_crc.build.log
+
 # ------------------------------------------------------------------ tests
-test: test-py $(BUILD)/tb_pkg_sizes/Vtb_pkg_sizes test-m1
+test: test-py $(BUILD)/tb_pkg_sizes/Vtb_pkg_sizes test-m1 test-m2
 	./$(BUILD)/tb_pkg_sizes/Vtb_pkg_sizes
 
 test-py:
@@ -95,6 +106,9 @@ test-py:
 
 test-m1: $(BUILD)/tb_async_fifo/Vtb_async_fifo $(BUILD)/tb_link_m1/Vtb_link_m1
 	./scripts/run_m1_tests.sh
+
+test-m2: $(BUILD)/tb_crc/Vtb_crc $(BUILD)/crc_vectors.txt
+	CRC_NVEC=$(CRC_NVEC) ./scripts/run_m2_tests.sh
 
 # ------------------------------------------------------------------ debug views
 # Separate traced build of tb_link_m1; the regression binary has no dump code.
