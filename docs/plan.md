@@ -1,12 +1,13 @@
 # T-FLEX Plan: Milestones, Risks, Setup, Open Decisions
 
-__Status:__ Milestone 1 complete (2026-09-28), awaiting approval before Milestone 2. Report: [results/reports/m1_report.md](../results/reports/m1_report.md).
+__Status:__ Milestone 2 complete (2026-10-19), awaiting approval before Milestone 3. Reports: [results/reports/m1_report.md](../results/reports/m1_report.md), [results/reports/m2_report.md](../results/reports/m2_report.md).
 
 | Milestone | Status | Evidence |
 |---|---|---|
 | Phase 1 — specification | done | this document set |
 | M1 — CDC + basic link datapath | __done__ | `make test`: 60/60 regression runs pass; m1_report.md; re-verified 2026-10-17 on WSL2, results byte-identical (m1_report.md §6) |
-| M2 — CRC / retry + minimal fault injection | not started | — |
+| M2 — CRC / retry + minimal fault injection | __done__ | `make test`: pytest 21 passed, M1 60/60, M2 101/101; mutation check 10/10 detected; m2_report.md |
+| M3 — lanes, gearbox, mappers, static repair | not started | — |
 
 ## 0. Decision log (approved by the project owner, 2026-09-28)
 

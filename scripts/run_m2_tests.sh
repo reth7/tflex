@@ -7,6 +7,11 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 CRC_BIN=build/tb_crc/Vtb_crc
+FI_BIN=build/tb_fault_injector/Vtb_fault_injector
+SBM_BIN=build/tb_sb_mux/Vtb_sb_mux
+LINK_BIN=build/tb_link_m1/Vtb_link_m1
+LINK8_BIN=build/tb_link_m1_rd8/Vtb_link_m1
+LINKRTO_BIN=build/tb_link_m1_rto/Vtb_link_m1
 REPORT=results/reports/m2_test_summary.txt
 CSV=results/raw/m2/m2_results.csv
 mkdir -p results/reports results/raw/m2 build
@@ -26,10 +31,50 @@ run() {  # label, binary, args...
   echo "$res" >> "$REPORT"
 }
 
-# --- CRC: golden vectors (Python), single-bit and burst detection
+# --- unit tests: CRC (golden vectors, single-bit, bursts), fault injector, sideband mux
 for seed in 1 2 3; do
   run "crc seed$seed" $CRC_BIN +VECTORS=build/crc_vectors.txt +NVEC=${CRC_NVEC:-100000} +NBURST=20000 +verilator+seed+$seed
+  run "fault_injector seed$seed" $FI_BIN +NCYC=20000 +verilator+seed+$seed
+  run "sb_mux seed$seed" $SBM_BIN +NMSG=2000 +verilator+seed+$seed
 done
+
+# --- retry / flow-control tests on the simplex link, M1 clock configurations
+#     (core / link / mem periods in ps; see run_m1_tests.sh)
+while read -r cfg c l m; do
+  clk="+CFG=$cfg +CORE_PS=$c +LINK_PS=$l +MEM_PS=$m +SINK_PCT=100"
+  for t in crc1 bitflip replay_corrupt nak_first wrap maxretry spare_dead nak_density bp_recover; do
+    seeds="1"; [ "$cfg" = nominal ] && case $t in crc1|bitflip|replay_corrupt|maxretry) seeds="1 2 3";; esac
+    for seed in $seeds; do
+      run "link_m2 $t $cfg seed$seed" $LINK_BIN +TEST=$t $clk +verilator+seed+$seed
+    done
+  done
+  # 8-entry replay buffer: window-limited traffic, NAK of the flit that fills the window
+  # (both deterministic: one seed)
+  run "link_m2 window $cfg rd8" $LINK8_BIN +TEST=window $clk +verilator+seed+1
+  run "link_m2 nak_last $cfg rd8" $LINK8_BIN +TEST=nak_last $clk +verilator+seed+1
+  # 20-cycle replay timeout: the timer fires and the receiver drops the duplicates
+  run "link_m2 dup $cfg rto20" $LINKRTO_BIN +TEST=dup $clk +verilator+seed+1
+done <<'CFGS'
+nominal  1000  500 1250
+equal    1000 1000 1000
+slowlink 1000 2000 1250
+fastmem  1000  500  500
+odd      1002  576 1630
+CFGS
+
+# --- measurement: random single-bit errors per transmitted flit (p = PPM / 1e6),
+#     sustained 4 KiB writes; link-limited (equal) and memory-limited (nominal) clocks
+while read -r cfg c l m; do
+  for ppm in 0 1000 10000 50000; do
+    for seed in 1 2 3; do
+      run "link_m2 ber $cfg ppm$ppm seed$seed" $LINK_BIN +TEST=ber +PPM=$ppm +NPKT=100 \
+          +CFG=$cfg +CORE_PS=$c +LINK_PS=$l +MEM_PS=$m +SINK_PCT=100 +verilator+seed+$seed
+    done
+  done
+done <<'CFGS'
+nominal  1000  500 1250
+equal    1000 1000 1000
+CFGS
 
 # CSV of all RESULT key=value pairs
 python3 - "$REPORT" "$CSV" <<'PY'

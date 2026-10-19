@@ -29,7 +29,7 @@ Sideband: a separate, reliable, fixed-latency message channel for training, ACK/
 | 15:0 | `crc` | 16 | over bits 255:16 |
 
 **CRC:** CRC-16, polynomial `0x1021` (x¹⁶+x¹²+x⁵+1), init `0xFFFF`, not reflected, no final XOR, processed MSB-first over the 240 covered bits. Polynomial, init and width are parameters. Properties relied on: detects all 1- and 2-bit errors in the covered length, all odd-weight errors (the polynomial has an (x+1) factor) and all bursts ≤ 16 bits. Undetected errors are still possible for other patterns (≈ 2⁻¹⁶ for random corruption) and are counted end to end by payload signatures (§8).
-Reference vectors (checked in the Phase 1 toolchain smoke test, Verilator vs. Python; they become regression vectors in Milestone 2): 240 zero bits → `0x2A45`; `seq = 0x5A`, everything else zero → `0xB7C3`.
+Reference vectors (regression vectors since Milestone 2: `tb_crc` and `python/tests/test_crc.py`; golden model `python/tflex/protocol/crc.py`): 240 zero bits → `0x2A45`; `seq = 0x5A`, everything else zero → `0xB7C3`.
 
 ## 3. Packet format
 
@@ -90,6 +90,17 @@ The receiver never back-pressures the gearbox: the credit protocol guarantees RX
 ### 4.3 Credit return
 
 `tflex_credit_return` compares the RX FIFO's synchronized read pointer with the last value reported and sends `SB_CREDIT(n)` (coalesced, up to 255 per message).
+
+### 4.4 Implementation notes (Milestone 2)
+
+Choices the sections above leave open, as implemented in `tflex_retry_tx` / `tflex_retry_rx`:
+
+- `NAK(e)` also acknowledges `e − 1`: the receiver NAKs only its next expected sequence, so everything before `e` has been delivered.
+- An `ACK` arriving while a replay is in progress moves the replay pointer forward past acknowledged flits; the replay is not restarted.
+- The `MAX_RETRY` escalation fires once per stuck sequence (on the `(MAX_RETRY+1)`-th NAK of the same `e`); the counter is cleared when `e` is acknowledged.
+- NAK density uses consecutive (tumbling) windows of `nak_window_flits` received flits and fires at most once per window; NAKs counted include re-sends.
+- Timer defaults (assumed parameters, `configs/default.yaml`): ACK every 8 deliveries or after 16 cycles without one; NAK re-send after `2 × (channel + sideband latency) + 32` = 64 link cycles; replay timeout `4 ×` that = 256 cycles. The re-send interval must exceed the NAK → replay round trip (21 link cycles measured at the default latencies, m2_report.md), otherwise one error would cause several replays.
+- Latency added by the link layer: `retry_tx` 1 link cycle (output register, CRC computed combinationally before it); `retry_rx` 0 cycles (CRC check and delivery are combinational into the RX FIFO).
 
 ## 5. Logical PHY
 

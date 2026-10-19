@@ -200,6 +200,42 @@ package tflex_pkg;
   } fault_cmd_t;
 
   // ---------------------------------------------------------------------------
+  // Milestone 2: link-layer retry statistics (protocol.md section 8), 32-bit
+  // saturating counters.
+  // ---------------------------------------------------------------------------
+  typedef struct packed {
+    logic [31:0] flits_new;          // first transmissions
+    logic [31:0] flits_replayed;     // retransmissions (flags.replay = 1)
+    logic [31:0] stall_no_credit;    // cycles a new flit waited for a credit
+    logic [31:0] stall_window_full;  // cycles a new flit waited for replay-buffer space
+    logic [31:0] replay_events;      // NAKs acted on (go-back-N rewinds)
+    logic [31:0] replay_timeouts;    // replay-timer expiries (expected 0)
+    logic [31:0] retrain_reqs;       // MAX_RETRY escalations
+  } retry_tx_stats_t;
+
+  typedef struct packed {
+    logic [31:0] flits_ok;           // delivered in order to the RX FIFO
+    logic [31:0] crc_errors;
+    logic [31:0] seq_gaps;           // good CRC, sequence ahead of expected
+    logic [31:0] duplicates;         // good CRC, sequence behind expected
+    logic [31:0] naks_sent;          // all NAK messages, including resends
+    logic [31:0] nak_resends;
+    logic [31:0] acks_sent;
+    logic [31:0] retrain_reqs;       // NAK-density escalations
+  } retry_rx_stats_t;
+
+  function automatic logic [31:0] sat_inc(logic [31:0] x, logic en);
+    return (en && x != '1) ? x + 32'd1 : x;
+  endfunction
+
+  function automatic sb_msg_t sb_make(sb_opcode_e op, logic [39:0] arg);
+    sb_msg_t m;
+    m.op  = op;
+    m.arg = arg;
+    return m;
+  endfunction
+
+  // ---------------------------------------------------------------------------
   // Milestone 1: streams between packetizer, FIFOs and adapter
   // ---------------------------------------------------------------------------
   // Packet item stream (traffic source -> packetizer, depacketizer -> sink):

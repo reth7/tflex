@@ -1,7 +1,7 @@
 // =============================================================================
 // tflex_sideband_channel -- [sim] reliable fixed-latency message pipe, one
-// direction. Milestone 1 carries credit-return counts; from Milestone 2 it
-// carries sb_msg_t (ACK/NAK, credits, training messages).
+// direction, one message per cycle. Carries sb_msg_t (WIDTH = $bits(sb_msg_t)):
+// ACK / NAK / CREDIT from Milestone 2, training messages from Milestone 4.
 // =============================================================================
 module tflex_sideband_channel #(
   parameter int WIDTH   = 8,

@@ -43,7 +43,7 @@ Deviation from the brief's layout: Python lives in an importable package (`pytho
 ./scripts/setup_env.sh   # apt: verilator yosys iverilog; sv2v -> .tools/; Python venv -> .venv/
 make check-env
 make lint                # Verilator lint + sv2v/Yosys parse
-make test                # package checks + Milestone 1 regression (60 runs)
+make test                # pytest golden models + package checks + M1 and M2 regressions
 make wave                # build/wave/link_m1_single.fst (traced tb_link_m1, nominal clocks)
 make diagram             # build/diagram/*.svg (Yosys netlist views, needs graphviz)
 ```

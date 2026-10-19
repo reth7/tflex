@@ -1,8 +1,9 @@
 // =============================================================================
 // tflex_crc -- combinational CRC over DATA_W bits, MSB first (docs/protocol.md
 // section 2). Not reflected, no final XOR. The bit-serial loop below has only
-// constant shifts and XORs, so synthesis folds it into one XOR matrix derived
-// from POLY at elaboration time; nothing iterates in hardware.
+// constant shifts, ANDs with the constant POLY and XORs (no branches), so
+// synthesis folds it into one XOR matrix derived from POLY at elaboration
+// time; nothing iterates in hardware.
 // Golden model: python/tflex/protocol/crc.py.
 // =============================================================================
 module tflex_crc #(
@@ -16,9 +17,7 @@ module tflex_crc #(
 );
   always_comb begin
     crc = INIT;
-    for (int i = DATA_W - 1; i >= 0; i--) begin
-      if (crc[CRC_W-1] ^ data[i]) crc = {crc[CRC_W-2:0], 1'b0} ^ POLY;
-      else                        crc = {crc[CRC_W-2:0], 1'b0};
-    end
+    for (int i = DATA_W - 1; i >= 0; i--)
+      crc = {crc[CRC_W-2:0], 1'b0} ^ (POLY & {CRC_W{crc[CRC_W-1] ^ data[i]}});
   end
 endmodule

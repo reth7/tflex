@@ -117,6 +117,8 @@ CRC-16 generation/check, sequence numbers, go-back-N retry with the replay buffe
 
 ## 6. Re-verification on a second machine (2026-10-17)
 
+*Note added in Milestone 2 (2026-10-19):* from M2 on, `make test` runs these M1 tests on the M2 link (retry layer, sideband mux). 52 of the 60 RESULT lines in `m1_test_summary.txt` are unchanged; 8 backpressure/reset runs differ by ≤ 0.3 ns mean latency, ≤ 2.0 ns maximum latency and 1–2 stall cycles (m2_report.md §3). The numbers in §3 of this report are those of the M1 RTL at commit `f734a9d`.
+
 Environment: Ubuntu 24.04.2 LTS under WSL2 (kernel 5.15.167.4-microsoft-standard-WSL2), 16 hardware threads, 7 GiB RAM; Verilator 5.020, Yosys 0.33, sv2v v0.0.13, GNU Make 4.3, g++ 13.3.0; Python 3.12.3 venv with the pinned `requirements.txt` (all eight packages installed at the pinned versions; the pins had been verified only on Python 3.11).
 
 Two repository defects introduced after the M1 commit blocked the run and were fixed (no RTL behaviour or test change):

@@ -48,6 +48,13 @@ adapter:
   seq_bits: 8                 # flit sequence number width (mod 256 > 2*retry_depth)
   max_retry: 3                # replays of the same flit before escalating to RETRAIN
   rx_credits: 64              # initial TX credits; must be <= rx_fifo_depth
+  ack_coalesce_flits: 8       # RX sends a cumulative ACK every 8 delivered flits ...
+  ack_idle_cycles: 16         # ... or after 16 cycles without a delivery (protocol.md 4.2)
+  nak_resend_cycles: 64       # RX re-sends a pending NAK after this many cycles; default
+                              # 2*(channel + sideband latency) + 32 (must exceed the NAK round trip)
+  replay_timeout_cycles: 256  # TX replays from the oldest unACKed flit after this many cycles
+                              # without ACK/NAK; default 4 * nak_resend_cycles (never fires
+                              # with the reliable sideband; counted and checked as zero)
   crc:
     width: 16
     poly: 0x1021              # CRC-16/CCITT polynomial; NOT claimed to match UCIe's CRC

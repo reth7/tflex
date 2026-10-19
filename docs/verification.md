@@ -1,6 +1,6 @@
 # T-FLEX Verification Strategy
 
-**Status:** Milestone 1 implemented and passing (package checks, async FIFO suite, simplex-link suite, bound SVA; 60/60 regression runs). Details and mutation-check results: [results/reports/m1_report.md](../results/reports/m1_report.md).
+**Status:** Milestones 1 and 2 implemented and passing: pytest golden models (21 tests); M1 package, async FIFO and simplex-link suites (60/60 runs); M2 CRC, fault-injector, sideband-mux, retry and flow-control suites (101/101 runs); bound SVA throughout. Details and mutation-check results: [m1_report.md](../results/reports/m1_report.md), [m2_report.md](../results/reports/m2_report.md).
 
 ---
 
@@ -28,9 +28,10 @@
 |---|---|---|
 | Packet / flit | **M1 done:** header-only and 0, 1, 27, 28, 29, 56, 57, 256, 1024, 4096, 65535-byte packets end to end; flit counts (`flits_sent`) match protocol.md §3; TAIL placement checked by the shared length checker; every payload byte checked | M1 ✔ |
 | Async FIFO | **M1 done:** empty, fill to exactly DEPTH, drain, simultaneous push/pop, random valid/ready both sides, reset mid-traffic, 5 clock configs (1:1, 1:1 phase-shifted, 3.3:1, 1:3.3, 0.3 % drift) × 3 seeds. M4 adds randomized periods with jitter and the structural CDC check. Reset of one domain only is unsupported by design. | M1 ✔, M4 |
-| CRC | reference vectors; 10⁵ random flits vs Python; all single-bit errors detected; random bursts ≤ 16 detected | M2 |
-| Retry | single corrupted flit; corrupted replay; NAK of first/last flit in window; seq wrap-around beyond 256; window full; MAX_RETRY escalation; replay timer never fires fault-free; no loss, no duplicate, in-order delivery (scoreboard) | M2 |
-| Flow control | credits never negative; RX FIFO never overflows with slow consumer; throughput recovers after back-pressure | M2 |
+| CRC | **M2 done:** reference vectors; 10⁵ random flits vs Python; all single-bit errors detected; random bursts ≤ 16 detected (RTL `tb_crc`; Python also checks all 2-bit errors and every burst ≤ 16 position) | M2 ✔ |
+| Retry | **M2 done** (`tb_link_m1` M2 tests, 5 clock configs): single corrupted flit (`crc1`), single-bit errors (`bitflip`), corrupted replay (`replay_corrupt`); NAK of first/last flit in window (`nak_first`, `nak_last` with an 8-entry buffer); seq wrap-around beyond 256 (`wrap`); window full (`window`); MAX_RETRY escalation under a selected lane failure (`maxretry`); NAK-density escalation (`nak_density`); failed spare lane harmless (`spare_dead`); random per-flit errors up to 5 % (`ber`); replay timer never fires (checked in every run, M1 tests included); no loss, no duplicate, in-order delivery, every payload byte (scoreboard) | M2 ✔ |
+| Flow control | **M2 done:** credits never negative or above the initial value (SVA); RX FIFO never overflows (SVA, M1 backpressure tests); throughput recovers after a 20 % back-pressure phase (`bp_recover`) | M2 ✔ |
+| Fault injector (M2 subset) | **M2 done:** `tb_fault_injector` against an independent model: exact start/end cycles, lane masks, one-shot fires once on the first valid (non-IDLE for CRC) beat, concurrent commands, corrupted-beat counter | M2 ✔, M4 |
 | Gearbox | every width (32/16/8), every flit count 1–8, pause/resume patterns; bandwidth ratio W/32 at saturation | M3 |
 | Lane mapping / repair | exhaustive bad masks with ≤ 4 failures (for 36 lanes: Σ C(36,k), k ≤ 4 ≈ 67 k masks, run in the Python model and sampled in RTL); map uniqueness and monotonicity; spares count; degraded widths with 5–28 failures; `MAX_SHIFT = S` rejects what it cannot map | M3 |
 | Link training | clean training; dead lane found in LANE_CHECK; stuck-at-0/1; skew 0…MAX_SKEW per lane; skew beyond MAX_SKEW → ERROR; partner retrain request; LINK_DOWN and periodic recovery; ACTIVE never entered early | M4 |
@@ -71,6 +72,8 @@ Cover properties record that interesting states happened (each retrain reason, e
 | Yosys 0.33's native SV parser rejects some constructs used here (package functions with initialized locals) | Synthesis goes through sv2v 0.0.13 first (verified working on the Phase 1 package) |
 | **Found in M1:** Verilator 5.020 generates non-compiling C++ for a delay written as `#(int_var / 2)` | Testbench clocks use 64-bit half-period variables |
 | **Found in M1:** a reset that is low from time 0 has no edge; async-reset flops and assertion samples disagree at the first clock | Testbenches start with reset high and assert it at t = 1 ps; reset-state assertions are checked from the second clock of a reset |
+| **Found in M2:** Verilator 5.020 evaluates a side-effecting right-hand side (`$urandom`) more than once when the target is a packed-struct member (`c.lane_mask = 1 << ($urandom % 32)` gave a non-one-hot mask in 26 204 of 10⁵ draws in a minimal repro; 0 with the value drawn into a temporary first). It turned an intended single-bit fault into no fault or a 2-bit fault in the M2 bit-flip test | Testbench rule extended: draw random values into temporaries, then build structs with one whole assignment pattern (`'{field: value, ...}`), never member by member |
+| **Found in M2:** in a clocked `always` block of `tb_link_m1`, `if (p != 0 && ($urandom % N) < p)` drew a random number even when `p == 0` (no short-circuit of the side effect); the extra draws on every link cycle shifted the random stimulus of the M1 burst/backpressure/reset tests. A minimal repro in an `initial` block did short-circuit, so the trigger is context-dependent | Testbench rule: put a `$urandom` that must not always execute inside a nested `if`, never on the right of `&&` / `\|\|` / `?:` |
 | **Found in M1 (mutation check):** a read side that skips the synchronizer passes all simulation tests (no metastability in zero-delay 2-state simulation) | Structural CDC check planned for M4: every cross-domain signal must pass through `tflex_sync_bits` or `tflex_async_fifo` |
 
 ## 6. Regression and reporting

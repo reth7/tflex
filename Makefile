@@ -18,16 +18,20 @@ RTL_SRCS  := $(RTL_PKG) \
              rtl/common/tflex_delay_line.sv rtl/common/tflex_async_fifo.sv \
              rtl/common/tflex_crc.sv \
              rtl/adapter/tflex_pkt_len_check.sv rtl/adapter/tflex_packetizer.sv \
-             rtl/adapter/tflex_depacketizer.sv rtl/adapter/tflex_adapter_tx.sv \
-             rtl/adapter/tflex_adapter_rx.sv rtl/adapter/tflex_credit_return.sv \
+             rtl/adapter/tflex_depacketizer.sv rtl/adapter/tflex_retry_tx.sv \
+             rtl/adapter/tflex_retry_rx.sv rtl/adapter/tflex_credit_return.sv \
+             rtl/adapter/tflex_sb_mux.sv rtl/fault/tflex_fault_injector.sv \
              rtl/phy/tflex_phy_tx.sv rtl/phy/tflex_phy_rx.sv \
              rtl/link/tflex_d2d_channel.sv rtl/link/tflex_sideband_channel.sv \
              rtl/link/tflex_d2d_link_simplex.sv \
              rtl/top/tflex_traffic_src.sv rtl/top/tflex_traffic_sink.sv
 LINT_TOPS := tflex_d2d_link_simplex tflex_traffic_src tflex_traffic_sink \
-             tflex_packetizer tflex_depacketizer tflex_reset_sync tflex_crc
+             tflex_packetizer tflex_depacketizer tflex_reset_sync tflex_crc \
+             tflex_retry_tx tflex_retry_rx tflex_credit_return tflex_sb_mux \
+             tflex_fault_injector
 SVA_SRCS  := tb/assertions/tflex_stream_sva.sv tb/assertions/tflex_async_fifo_sva.sv \
-             tb/assertions/tflex_link_m1_sva.sv
+             tb/assertions/tflex_link_m1_sva.sv tb/assertions/tflex_retry_sva.sv \
+             tb/assertions/tflex_fault_injector_sva.sv
 
 # Testbench builds: RTL is linted with -Wall in `make lint`; testbench code
 # waives style warnings that are normal for behavioural TB code.
@@ -97,6 +101,28 @@ $(BUILD)/tb_crc/Vtb_crc: $(RTL_PKG) rtl/common/tflex_crc.sv tb/directed/tb_crc.s
 	@mkdir -p $(BUILD)
 	verilator --binary $(VFLAGS) --Mdir $(BUILD)/tb_crc --top-module tb_crc $^ > $(BUILD)/tb_crc.build.log
 
+# Same testbench with an 8-entry replay buffer (window-full tests)
+$(BUILD)/tb_link_m1_rd8/Vtb_link_m1: $(RTL_SRCS) $(SVA_SRCS) tb/directed/tb_link_m1.sv
+	@mkdir -p $(BUILD)
+	verilator --binary $(VFLAGS) -GRETRY_D=8 --Mdir $(BUILD)/tb_link_m1_rd8 --top-module tb_link_m1 \
+	  $(RTL_SRCS) $(SVA_SRCS) tb/directed/tb_link_m1.sv > $(BUILD)/tb_link_m1_rd8.build.log
+
+# Same testbench with a replay timeout shorter than the ACK round trip (duplicate test)
+$(BUILD)/tb_link_m1_rto/Vtb_link_m1: $(RTL_SRCS) $(SVA_SRCS) tb/directed/tb_link_m1.sv
+	@mkdir -p $(BUILD)
+	verilator --binary $(VFLAGS) -GREPLAY_TO=20 --Mdir $(BUILD)/tb_link_m1_rto --top-module tb_link_m1 \
+	  $(RTL_SRCS) $(SVA_SRCS) tb/directed/tb_link_m1.sv > $(BUILD)/tb_link_m1_rto.build.log
+
+$(BUILD)/tb_fault_injector/Vtb_fault_injector: $(RTL_PKG) rtl/common/tflex_reset_sync.sv rtl/fault/tflex_fault_injector.sv \
+    tb/assertions/tflex_fault_injector_sva.sv tb/directed/tb_fault_injector.sv
+	@mkdir -p $(BUILD)
+	verilator --binary $(VFLAGS) --Mdir $(BUILD)/tb_fault_injector --top-module tb_fault_injector $^ > $(BUILD)/tb_fault_injector.build.log
+
+$(BUILD)/tb_sb_mux/Vtb_sb_mux: $(RTL_PKG) rtl/common/tflex_reset_sync.sv rtl/adapter/tflex_sb_mux.sv \
+    tb/assertions/tflex_stream_sva.sv tb/assertions/tflex_retry_sva.sv tb/directed/tb_sb_mux.sv
+	@mkdir -p $(BUILD)
+	verilator --binary $(VFLAGS) --Mdir $(BUILD)/tb_sb_mux --top-module tb_sb_mux $^ > $(BUILD)/tb_sb_mux.build.log
+
 # ------------------------------------------------------------------ tests
 test: test-py $(BUILD)/tb_pkg_sizes/Vtb_pkg_sizes test-m1 test-m2
 	./$(BUILD)/tb_pkg_sizes/Vtb_pkg_sizes
@@ -107,7 +133,9 @@ test-py:
 test-m1: $(BUILD)/tb_async_fifo/Vtb_async_fifo $(BUILD)/tb_link_m1/Vtb_link_m1
 	./scripts/run_m1_tests.sh
 
-test-m2: $(BUILD)/tb_crc/Vtb_crc $(BUILD)/crc_vectors.txt
+test-m2: $(BUILD)/tb_crc/Vtb_crc $(BUILD)/crc_vectors.txt $(BUILD)/tb_fault_injector/Vtb_fault_injector \
+         $(BUILD)/tb_sb_mux/Vtb_sb_mux $(BUILD)/tb_link_m1/Vtb_link_m1 $(BUILD)/tb_link_m1_rd8/Vtb_link_m1 \
+         $(BUILD)/tb_link_m1_rto/Vtb_link_m1
 	CRC_NVEC=$(CRC_NVEC) ./scripts/run_m2_tests.sh
 
 # ------------------------------------------------------------------ debug views
